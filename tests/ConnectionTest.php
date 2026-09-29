@@ -346,10 +346,16 @@ final class ConnectionTest extends TestCase
         $logger    = new SpyLogger();
         $timestamp = new DateTimeImmutable('2024-01-01 00:00:00+03:00');
 
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with(['2024-01-01 00:00:00'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('rowCount')
@@ -373,6 +379,8 @@ final class ConnectionTest extends TestCase
         $params = $last['context']['source_params'] ?? $last['context']['params'] ?? [];
 
         $this->assertSame('2024-01-01 00:00:00', $params['created_at'] ?? $params['0'] ?? null);
+
+        self::assertSame([1 => '2024-01-01 00:00:00'], $bound);
     }
 
     /**
@@ -408,10 +416,16 @@ final class ConnectionTest extends TestCase
     {
         $logger = new SpyLogger();
 
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([0])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('rowCount')
@@ -435,6 +449,8 @@ final class ConnectionTest extends TestCase
         $params = $last['context']['source_params'] ?? $last['context']['params'] ?? [];
 
         $this->assertSame(0, $params['is_email_confirmed'] ?? $params['0'] ?? null);
+
+        self::assertSame([1 => 0], $bound);
     }
 
     /**
@@ -443,10 +459,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function convertsRepeatedNamedPlaceholderToPositionalBindings(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with(['%john%', '%john%'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -467,6 +489,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([1 => '%john%', 2 => '%john%'], $bound);
     }
 
     /**
@@ -475,10 +499,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function inlinesBindingsForShowStatements(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -499,6 +529,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([], $bound);
     }
 
     /**
@@ -507,10 +539,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlForMixedNamedAndPositionalInput(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([0 => 'john@example.com', ':id' => 10])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -531,6 +569,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([1 => 'john@example.com', ':id' => 10], $bound);
     }
 
     /**
@@ -539,10 +579,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlWhenNamedPlaceholderValueIsMissing(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([':id' => 10])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -563,6 +609,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([':id' => 10], $bound);
     }
 
     /**
@@ -571,10 +619,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlWhenExtraNamedParamProvided(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([':id' => 10, ':unused' => 'x'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -595,5 +649,7 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([':id' => 10, ':unused' => 'x'], $bound);
     }
 }

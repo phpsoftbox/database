@@ -35,6 +35,7 @@ use function implode;
 use function in_array;
 use function is_bool;
 use function is_int;
+use function is_resource;
 use function is_scalar;
 use function is_string;
 use function json_encode;
@@ -266,7 +267,8 @@ final class Connection implements WarmupAwareConnectionInterface
             $prepared = $this->inlineBindingsForUnsupportedStatements($prepared);
 
             $stmt = $this->pdo->prepare($prepared->sql);
-            $stmt->execute($this->normalizePdoParams($prepared->bindings));
+            $this->bindParams($stmt, $this->normalizePdoParams($prepared->bindings));
+            $stmt->execute();
 
             $elapsedMs  = (hrtime(true) - $start) / 1_000_000;
             $logContext = [
@@ -301,6 +303,29 @@ final class Connection implements WarmupAwareConnectionInterface
             $this->recordProfilerQuery($span, $sql, $params, $elapsedMs, null, $e);
 
             throw new QueryException($e->getMessage(), (int) $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Связывает параметры с явным PDO-типом.
+     *
+     * PDOStatement::execute(array) передаёт все значения как строки: false превращается в '',
+     * что PostgreSQL отвергает для boolean-колонок (22P02). bool связывается как PDO::PARAM_BOOL,
+     * null — как PDO::PARAM_NULL, ресурсы — как PDO::PARAM_LOB, остальное — как строка (прежнее поведение).
+     *
+     * @param array<string|int, mixed> $params
+     */
+    private function bindParams(PDOStatement $stmt, array $params): void
+    {
+        foreach ($params as $key => $value) {
+            $type = match (true) {
+                $value === null     => PDO::PARAM_NULL,
+                is_bool($value)     => PDO::PARAM_BOOL,
+                is_resource($value) => PDO::PARAM_LOB,
+                default             => PDO::PARAM_STR,
+            };
+
+            $stmt->bindValue(is_int($key) ? $key + 1 : $key, $value, $type);
         }
     }
 
@@ -611,13 +636,16 @@ final class Connection implements WarmupAwareConnectionInterface
         return $value->format(DateTimeInterface::ATOM);
     }
 
+    /**
+     * PostgreSQL получает настоящий boolean (PDO::PARAM_BOOL), MySQL/MariaDB и SQLite — 1/0.
+     */
     private function formatBoolParam(bool $value): bool|int
     {
-        if ($this->isMySqlFamily()) {
-            return $value ? 1 : 0;
+        if ($this->driver->name() === 'postgres') {
+            return $value;
         }
 
-        return $value;
+        return $value ? 1 : 0;
     }
 
     private function isMySqlFamily(): bool
@@ -634,9 +662,18 @@ final class Connection implements WarmupAwareConnectionInterface
                 'isolation' => $isolationLevel?->value,
             ]);
 
+            // MySQL/MariaDB: SET TRANSACTION действует на следующую транзакцию и запрещён внутри начатой.
+            // PostgreSQL: SET TRANSACTION должен быть первым оператором внутри транзакции.
+            $setBeforeBegin = $this->isMySqlFamily();
+
             try {
+                if ($isolationLevel !== null && $setBeforeBegin) {
+                    $this->setIsolationLevel($isolationLevel);
+                }
+
                 $this->pdo->beginTransaction();
-                if ($isolationLevel !== null) {
+
+                if ($isolationLevel !== null && !$setBeforeBegin) {
                     $this->setIsolationLevel($isolationLevel);
                 }
 
@@ -647,7 +684,7 @@ final class Connection implements WarmupAwareConnectionInterface
                 }
                 $this->transactionLevel = 0;
 
-                throw $e;
+                throw $this->wrapPdoException($e);
             }
         }
 
@@ -658,8 +695,17 @@ final class Connection implements WarmupAwareConnectionInterface
         } catch (Throwable $e) {
             --$this->transactionLevel;
 
-            throw $e;
+            throw $this->wrapPdoException($e);
         }
+    }
+
+    private function wrapPdoException(Throwable $e): Throwable
+    {
+        if ($e instanceof PDOException) {
+            return new QueryException($e->getMessage(), (int) $e->getCode(), $e);
+        }
+
+        return $e;
     }
 
     private function commitTransaction(): bool
