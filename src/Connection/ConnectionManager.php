@@ -6,6 +6,7 @@ namespace PhpSoftBox\Database\Connection;
 
 use PhpSoftBox\Database\Configurator\DatabaseFactoryInterface;
 use PhpSoftBox\Database\Contracts\ConnectionInterface;
+use PhpSoftBox\Database\Contracts\WarmupAwareConnectionInterface;
 use PhpSoftBox\Database\Exception\ConfigurationException;
 
 /**
@@ -47,6 +48,21 @@ final class ConnectionManager implements ConnectionManagerInterface
             return $this->connection($name . '.write');
         } catch (ConfigurationException) {
             return $this->connection($name);
+        }
+    }
+
+    /**
+     * Очищает warmup store всех созданных подключений.
+     *
+     * Hook сброса состояния для долгоживущих воркеров: вызывайте между запросами/задачами,
+     * чтобы не отдавать строки, изменённые другими процессами.
+     */
+    public function clearWarmup(): void
+    {
+        foreach ($this->connections as $connection) {
+            if ($connection instanceof WarmupAwareConnectionInterface) {
+                $connection->clearWarmup();
+            }
         }
     }
 

@@ -757,6 +757,9 @@ final class Connection implements WarmupAwareConnectionInterface
 
         --$this->transactionLevel;
 
+        // Прогретые внутри транзакции строки могли прочитать откатываемые изменения.
+        $this->clearWarmup();
+
         if ($this->transactionLevel === 0) {
             $this->logger?->info('Rollback transaction');
 

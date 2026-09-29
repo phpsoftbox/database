@@ -24,6 +24,7 @@ use function array_key_exists;
 use function array_replace;
 use function explode;
 use function is_array;
+use function is_int;
 use function is_string;
 use function sprintf;
 use function str_contains;
@@ -34,21 +35,31 @@ use function str_contains;
  * Поддерживаемые драйверы: sqlite, mysql, mariadb, postgres.
  * Конфигурация задаётся массивом, чтобы было удобно использовать и с DI, и без.
  */
-final readonly class DatabaseFactory implements DatabaseFactoryInterface
+final class DatabaseFactory implements DatabaseFactoryInterface
 {
-    private DriverRegistry $drivers;
+    private readonly DriverRegistry $drivers;
+
+    /**
+     * Warmup store на группу подключений (main, main.read, main.write и default → main используют один store),
+     * если общий store не передан в конструктор.
+     *
+     * @var array<string, WarmupStore>
+     */
+    private array $groupWarmupStores = [];
 
     /**
      * @param array<string, mixed> $config
+     * @param WarmupStore|null $warmupStore Общий store для всех подключений фабрики. Если не задан,
+     *                                      store создаётся на группу подключений (лимит — config['warmup']['max_entries']).
      */
     public function __construct(
-        private array $config,
-        private ?LoggerInterface $logger = null,
-        private ?PaginationPaginator $paginator = null,
+        private readonly array $config,
+        private readonly ?LoggerInterface $logger = null,
+        private readonly ?PaginationPaginator $paginator = null,
         ?DriverRegistry $drivers = null,
-        private ?WarmupStore $warmupStore = null,
-        private ?ProfilerInterface $profiler = null,
-        private ?DatabaseProfilerCollector $profilerCollector = null,
+        private readonly ?WarmupStore $warmupStore = null,
+        private readonly ?ProfilerInterface $profiler = null,
+        private readonly ?DatabaseProfilerCollector $profilerCollector = null,
     ) {
         $this->drivers = $drivers ?? new DriverRegistry([
             new SqliteDriver(),
@@ -113,10 +124,66 @@ final readonly class DatabaseFactory implements DatabaseFactoryInterface
             logger: $this->logger,
             paginator: $this->paginator,
             warmupConnectionName: $connection,
-            warmupStore: $this->warmupStore,
+            warmupStore: $this->warmupStoreFor($connections, $connection),
             profiler: $this->profiler,
             profilerCollector: $this->profilerCollector,
         );
+    }
+
+    /**
+     * Очищает warmup store всех подключений, созданных фабрикой (hook сброса состояния между запросами воркера).
+     */
+    public function clearWarmup(): void
+    {
+        $this->warmupStore?->clear();
+
+        foreach ($this->groupWarmupStores as $store) {
+            $store->clear();
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $connections
+     */
+    private function warmupStoreFor(array $connections, string $connection): WarmupStore
+    {
+        if ($this->warmupStore !== null) {
+            return $this->warmupStore;
+        }
+
+        $group = $this->connectionGroup($connections, $connection);
+
+        return $this->groupWarmupStores[$group] ??= new WarmupStore($this->warmupMaxEntries());
+    }
+
+    /**
+     * Имя группы подключения: "default" → имя по умолчанию, "main.read"/"main.write" → "main".
+     *
+     * @param array<string, mixed> $connections
+     */
+    private function connectionGroup(array $connections, string $connection): string
+    {
+        $default = is_string($connections['default'] ?? null) ? $connections['default'] : 'default';
+
+        $group = str_contains($connection, '.') ? explode('.', $connection, 2)[0] : $connection;
+
+        return $group === 'default' ? $default : $group;
+    }
+
+    private function warmupMaxEntries(): int
+    {
+        $warmup = $this->config['warmup'] ?? [];
+        $max    = is_array($warmup) ? ($warmup['max_entries'] ?? null) : null;
+
+        if ($max === null) {
+            return WarmupStore::DEFAULT_MAX_ENTRIES;
+        }
+
+        if (!is_int($max) || $max < 1) {
+            throw new ConfigurationException('Config "warmup.max_entries" must be a positive integer.');
+        }
+
+        return $max;
     }
 
     /**
