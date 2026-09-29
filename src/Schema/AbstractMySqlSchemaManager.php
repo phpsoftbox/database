@@ -53,6 +53,9 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
 
     public function hasTable(string $table): bool
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $table = trim($table);
         if ($table === '') {
             return false;
@@ -76,7 +79,7 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
         }
 
         return new TableDefinition(
-            name: $table,
+            name: $this->connection->table(trim($table)),
             columns: $this->columns($table),
             indexes: $this->indexes($table),
             foreignKeys: $this->foreignKeys($table),
@@ -88,6 +91,9 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
      */
     public function columns(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             'SELECT column_name AS column_name, column_type AS column_type, '
             . 'is_nullable AS is_nullable, column_default AS column_default, column_key AS column_key '
@@ -145,6 +151,9 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
      */
     public function primaryKey(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             'SELECT k.column_name AS column_name '
             . 'FROM information_schema.table_constraints tc '
@@ -173,6 +182,9 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
      */
     public function indexes(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             'SELECT index_name AS index_name, non_unique AS non_unique, '
             . 'seq_in_index AS seq_in_index, column_name AS column_name '
@@ -222,6 +234,9 @@ abstract readonly class AbstractMySqlSchemaManager implements SchemaManagerInter
      */
     public function foreignKeys(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             'SELECT k.constraint_name AS constraint_name, k.ordinal_position AS ordinal_position, '
             . 'k.referenced_table_name AS referenced_table_name, k.column_name AS column_name, '

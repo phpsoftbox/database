@@ -55,24 +55,28 @@ class ColumnBlueprint
     /**
      * CURRENT_TIMESTAMP по умолчанию / ON UPDATE.
      *
-     * Применимо в основном к datetime/timestamp у MySQL/MariaDB.
+     * Применимо только к datetime/timestamp. ON UPDATE поддерживают только MySQL/MariaDB.
      */
     public bool $useCurrent         = false;
     public bool $useCurrentOnUpdate = false;
 
     /**
      * Формат для useCurrent/useCurrentOnUpdate.
+     *
+     * @deprecated Не влияет на SQL: CURRENT_TIMESTAMP применяется к любой колонке datetime/timestamp.
      */
     public UseCurrentFormatsEnum $useCurrentFormat = UseCurrentFormatsEnum::DATETIME;
 
     /**
-     * Индекс на колонку.
+     * Индекс на колонку: флаг и необязательное имя (без имени используется {table}_{column}_index).
      */
+    public bool $withIndex    = false;
     public ?string $indexName = null;
 
     /**
-     * Уникальный индекс на колонку.
+     * Уникальный индекс на колонку: флаг и необязательное имя (без имени используется {table}_{column}_unique).
      */
+    public bool $withUnique    = false;
     public ?string $uniqueName = null;
 
     /**
@@ -192,6 +196,11 @@ class ColumnBlueprint
         return $this;
     }
 
+    /**
+     * DEFAULT CURRENT_TIMESTAMP для колонки datetime/timestamp (MySQL/MariaDB, PostgreSQL, SQLite).
+     *
+     * Аргумент $format сохранён для совместимости и не влияет на SQL.
+     */
     public function useCurrent(bool $value = true, UseCurrentFormatsEnum $format = UseCurrentFormatsEnum::DATETIME): self
     {
         $this->useCurrent       = $value;
@@ -200,6 +209,12 @@ class ColumnBlueprint
         return $this;
     }
 
+    /**
+     * ON UPDATE CURRENT_TIMESTAMP для колонки datetime/timestamp. Поддерживается только MySQL/MariaDB;
+     * компиляторы PostgreSQL и SQLite выбрасывают ConfigurationException.
+     *
+     * Аргумент $format сохранён для совместимости и не влияет на SQL.
+     */
     public function useCurrentOnUpdate(bool $value = true, UseCurrentFormatsEnum $format = UseCurrentFormatsEnum::DATETIME): self
     {
         $this->useCurrentOnUpdate = $value;
@@ -208,15 +223,23 @@ class ColumnBlueprint
         return $this;
     }
 
+    /**
+     * Создаёт индекс на колонку. Без имени используется имя по умолчанию {table}_{column}_index.
+     */
     public function index(?string $name = null): self
     {
+        $this->withIndex = true;
         $this->indexName = $name;
 
         return $this;
     }
 
+    /**
+     * Создаёт уникальный индекс на колонку. Без имени используется имя по умолчанию {table}_{column}_unique.
+     */
     public function unique(?string $name = null): self
     {
+        $this->withUnique = true;
         $this->uniqueName = $name;
 
         return $this;

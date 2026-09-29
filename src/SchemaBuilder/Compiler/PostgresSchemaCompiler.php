@@ -31,7 +31,7 @@ final class PostgresSchemaCompiler extends AbstractSchemaCompiler
             return $name . ' SERIAL PRIMARY KEY';
         }
 
-        // unsigned/useCurrent/useCurrentOnUpdate игнорируем (driver-specific)
+        // unsigned в PostgreSQL не поддерживается и игнорируется.
 
         $sql = $name . ' ' . $this->compileType($col);
 
@@ -44,7 +44,9 @@ final class PostgresSchemaCompiler extends AbstractSchemaCompiler
             $sql .= ' NOT NULL';
         }
 
-        if ($this->hasDefault($col)) {
+        if ($col->useCurrent) {
+            $sql .= ' DEFAULT CURRENT_TIMESTAMP';
+        } elseif ($this->hasDefault($col)) {
             $sql .= ' DEFAULT ' . $this->compileDefault($col->default);
         }
 
@@ -64,6 +66,7 @@ final class PostgresSchemaCompiler extends AbstractSchemaCompiler
         foreach ($columns as $col) {
             $this->validateColumnCharacterOptions($col);
             $this->validateGeneratedColumn($col);
+            $this->validateUseCurrent($col);
 
             if ($col->type === 'id') {
                 throw new ConfigurationException('Changing id columns is not supported by postgres schema compiler.');
@@ -80,7 +83,9 @@ final class PostgresSchemaCompiler extends AbstractSchemaCompiler
 
             $out[] = 'ALTER TABLE ' . $tableSql . ' ALTER COLUMN ' . $columnSql . ($col->nullable ? ' DROP NOT NULL' : ' SET NOT NULL');
 
-            if ($this->hasDefault($col)) {
+            if ($col->useCurrent) {
+                $out[] = 'ALTER TABLE ' . $tableSql . ' ALTER COLUMN ' . $columnSql . ' SET DEFAULT CURRENT_TIMESTAMP';
+            } elseif ($this->hasDefault($col)) {
                 $out[] = 'ALTER TABLE ' . $tableSql . ' ALTER COLUMN ' . $columnSql . ' SET DEFAULT ' . $this->compileDefault($col->default);
             }
         }

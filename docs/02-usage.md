@@ -191,3 +191,33 @@ $conn->transaction(function ($conn): void {
     $user = $conn->fetchOne('SELECT id, name FROM ' . $conn->table('users') . ' WHERE id = :id', ['id' => 10]);
 });
 ```
+
+## Транзакции и уровень изоляции
+
+```php
+use PhpSoftBox\Database\IsolationLevelEnum;
+
+$conn->transaction(function ($conn): void {
+    // ...
+}, IsolationLevelEnum::REPEATABLE_READ);
+```
+
+Уровень изоляции применяется только к внешней транзакции (вложенные используют `SAVEPOINT`):
+
+- MySQL/MariaDB: `SET TRANSACTION ISOLATION LEVEL ...` выполняется **до** `BEGIN` и действует
+  на одну следующую транзакцию (внутри начатой транзакции MySQL/MariaDB запрещают менять уровень);
+- PostgreSQL: `SET TRANSACTION ISOLATION LEVEL ...` выполняется первым оператором внутри транзакции;
+- SQLite: `PRAGMA read_uncommitted`.
+
+Ошибки PDO при старте транзакции и создании savepoint выбрасываются как `QueryException`.
+
+## Типы параметров
+
+Параметры связываются через `PDOStatement::bindValue()`:
+
+- `bool` — для PostgreSQL как `PDO::PARAM_BOOL` (`true`/`false` можно передавать в boolean-колонки
+  и условия), для MySQL/MariaDB и SQLite как `1`/`0`;
+- `null` — `PDO::PARAM_NULL`;
+- `DateTimeInterface` — строка `Y-m-d H:i:s` для MySQL/MariaDB и ISO 8601 (ATOM) для остальных;
+- ресурсы (потоки) — `PDO::PARAM_LOB`;
+- остальные значения — строкой (`PDO::PARAM_STR`).

@@ -8,10 +8,8 @@ use PhpSoftBox\Database\Exception\ConfigurationException;
 use PhpSoftBox\Database\SchemaBuilder\CharsetCollationName;
 use PhpSoftBox\Database\SchemaBuilder\ColumnBlueprint;
 use PhpSoftBox\Database\SchemaBuilder\TableBlueprint;
-use PhpSoftBox\Database\SchemaBuilder\UseCurrentFormatsEnum;
 
 use function implode;
-use function in_array;
 use function is_bool;
 use function is_float;
 use function is_int;
@@ -39,7 +37,7 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
             $parts[] = 'COLLATE=' . CharsetCollationName::normalize($table->collation, 'collation');
         }
         if (is_string($table->comment) && $table->comment !== '') {
-            $parts[] = "COMMENT='" . str_replace("'", "''", $table->comment) . "'";
+            $parts[] = "COMMENT='" . $this->escapeString($table->comment) . "'";
         }
 
         return implode(' ', $parts);
@@ -55,7 +53,7 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
                 $sql .= ' PRIMARY KEY';
             }
             if (is_string($col->comment) && $col->comment !== '') {
-                $sql .= " COMMENT '" . str_replace("'", "''", $col->comment) . "'";
+                $sql .= " COMMENT '" . $this->escapeString($col->comment) . "'";
             }
 
             return $sql;
@@ -113,16 +111,11 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
             $sql .= ' NOT NULL';
         }
 
-        if ($col->useCurrent || $col->useCurrentOnUpdate) {
-            $targetType = $col->useCurrentFormat === UseCurrentFormatsEnum::TIMESTAMP ? 'timestamp' : 'datetime';
-            if (in_array($col->type, ['datetime', 'timestamp'], true) && $col->type === $targetType) {
-                if ($col->useCurrent) {
-                    $sql .= ' DEFAULT CURRENT_TIMESTAMP';
-                }
-                if ($col->useCurrentOnUpdate) {
-                    $sql .= ' ON UPDATE CURRENT_TIMESTAMP';
-                }
-            }
+        if ($col->useCurrent) {
+            $sql .= ' DEFAULT CURRENT_TIMESTAMP';
+        }
+        if ($col->useCurrentOnUpdate) {
+            $sql .= ' ON UPDATE CURRENT_TIMESTAMP';
         }
 
         if ($this->hasDefault($col) && !$col->useCurrent) {
@@ -134,7 +127,7 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
         }
 
         if (is_string($col->comment) && $col->comment !== '') {
-            $sql .= " COMMENT '" . str_replace("'", "''", $col->comment) . "'";
+            $sql .= " COMMENT '" . $this->escapeString($col->comment) . "'";
         }
 
         return $sql;
@@ -246,6 +239,20 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
             return 'NULL';
         }
 
-        return "'" . str_replace("'", "''", (string) $value) . "'";
+        return "'" . $this->escapeString((string) $value) . "'";
+    }
+
+    /**
+     * Экранирует содержимое строкового литерала MySQL/MariaDB: обратный слэш и одинарную кавычку
+     * (в режиме по умолчанию обратный слэш внутри литерала — escape-символ).
+     */
+    private function escapeString(string $value): string
+    {
+        return str_replace(['\\', "'"], ['\\\\', "''"], $value);
+    }
+
+    protected function supportsUseCurrentOnUpdate(): bool
+    {
+        return true;
     }
 }

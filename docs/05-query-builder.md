@@ -40,6 +40,43 @@ $compiled->bindings;
 - в SQL есть placeholder без значения;
 - переданы лишние named-параметры, отсутствующие в SQL.
 
+## Подзапросы и UNION
+
+Подзапросы (`whereInSubquery()`, `whereExists()`, `fromSubquery()`, `joinSubquery()`, `selectExists()`)
+и части `union()`/`unionAll()` компилируются отдельными билдерами, у каждого из которых своя нумерация
+автоматических параметров (`:in_1`, `:where_1`, ...). Чтобы значения не подменяли друг друга, при встраивании
+все именованные параметры подзапроса получают уникальный префикс `__sq{N}_`:
+
+```php
+$archived = $conn->query()->select('id')->from('users')->whereIn('id', [3, 4]);
+
+$compiled = $conn->query()
+    ->select('id')
+    ->from('users')
+    ->whereIn('id', [1, 2])
+    ->union($archived)
+    ->compile();
+
+// SELECT "id" FROM "users" WHERE ("id" IN (:in_1, :in_2))
+//     UNION (SELECT "id" FROM "users" WHERE ("id" IN (:__sq1_in_1, :__sq1_in_2)))
+// bindings: ['in_1' => 1, 'in_2' => 2, '__sq1_in_1' => 3, '__sq1_in_2' => 4]
+```
+
+Имена параметров, переданных в подзапрос вручную (`['status' => ...]`), тоже получают префикс — не
+рассчитывайте на них в собранном `CompiledQuery`. Не используйте собственные имена параметров, начинающиеся
+с `__sq`.
+
+Части UNION встраиваются в скобках: `... UNION (SELECT ...)`. SQLite скобки вокруг частей UNION не
+поддерживает, поэтому для него используется форма `... UNION SELECT * FROM (SELECT ...)`.
+
+## INSERT/UPDATE без колонок
+
+`insert('table', [])` вставляет строку со значениями по умолчанию: `INSERT INTO t DEFAULT VALUES`
+для PostgreSQL и SQLite, `INSERT INTO t () VALUES ()` для MySQL/MariaDB.
+
+`update('table', [])` при компиляции выбрасывает `InvalidArgumentException` (раньше собирался
+некорректный `UPDATE t SET 1 = 1`). Проверяйте, что набор изменений не пуст, до вызова `execute()`.
+
 ## Агрегации
 
 `SelectQueryBuilder` поддерживает:
@@ -59,6 +96,19 @@ $hasActive = $conn->query()->select()->from('users')->where('active = 1')->exist
 $noActive = $conn->query()->select()->from('users')->where('active = 1')->notExists();
 $minId = $conn->query()->select()->from('users')->min('id');
 ```
+
+`count()` сбрасывает `ORDER BY`/`LIMIT`/`OFFSET`. Если в запросе есть `GROUP BY`, `HAVING`, `DISTINCT`
+или `UNION`, подсчёт выполняется обёрткой `SELECT COUNT(*) FROM (<запрос>) AS __count`: возвращается
+количество строк результата (групп, уникальных строк, строк объединения), аргумент `$column` в этом
+случае не используется. Так же считается `total` в `paginate()`.
+
+```php
+// Количество групп, а не размер первой группы.
+$clients = $conn->query()->select('client_id')->from('orders')->groupBy('client_id')->count();
+```
+
+`sum()`/`avg()`/`min()`/`max()` к группировкам не адаптируются: при `GROUP BY` они вернут значение
+для первой группы.
 
 ## WHERE DSL и raw
 
@@ -102,6 +152,41 @@ $qb->groupBy('client_id')
    ->havingRaw('COUNT(*) > :min', ['min' => 10])
    ->orHavingRaw('SUM(total) > :sum', ['sum' => 1000]);
 ```
+
+## Экранирование идентификаторов
+
+Имена колонок и таблиц (ключи `insert()`/`update()`, колонки `orderBy()`/`groupBy()`, ключи и колонки
+массивного `where()`, `Connection::quoteIdentifier()`/`quoteTable()`) принимаются только в двух формах:
+
+- простое имя из букв, цифр и `_`, при необходимости через точку: `id`, `u.name`, `public.users.id`, `u.*`;
+- уже экранированное имя в кавычках **текущего** диалекта с удвоенными внутренними кавычками:
+  `"order"` для PostgreSQL/SQLite, `` `order` `` для MySQL/MariaDB.
+
+Любая другая строка (пробелы, операторы, запятые, кавычки другого диалекта) приводит к
+`InvalidArgumentException`. Раньше строка в кавычках по краям считалась «уже экранированной», и ключ
+вида `'"is_admin" = true, "name"'` из данных запроса встраивался в `UPDATE ... SET` как SQL.
+
+```php
+$conn->query()->update('users', ['"is_admin" = true, "name"' => 'x']); // InvalidArgumentException при компиляции
+$conn->quoteIdentifier('user`name');                                     // InvalidArgumentException
+```
+
+Операторы массивного `where()` ограничены списком: `=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `<=>`,
+`LIKE`, `NOT LIKE`, `ILIKE`, `NOT ILIKE`, `IN`, `NOT IN`, `IS`, `IS NOT`, `IS [NOT] DISTINCT FROM`.
+
+Алиасы (`fromSubquery(..., 'alias')`, `selectExists(..., 'alias')`) по-прежнему могут содержать любой текст:
+он всегда экранируется целиком. Имя таблицы допускает алиас с `AS` и без него: `users u`, `users AS u`.
+
+### Условия where()/having()/ON
+
+Простые строковые условия (`where('status = :status')`, условие `join(..., 'o.user_id = u.id')`)
+экранируются эвристикой: в кавычки берутся только имена колонок. Не изменяются:
+
+- строковые литералы: `name = 'hello world'`;
+- ключевые слова и операторы: `AND`, `OR`, `IS NULL`, `ILIKE`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, ...;
+- имена функций (слово перед `(`), префиксы типизированных литералов (`DATE '2024-01-01'`),
+  единицы после `INTERVAL` (`INTERVAL 1 DAY`);
+- плейсхолдеры `:name`, приведения `::type`, числа и уже экранированные имена.
 
 ## SELECT raw и strict
 

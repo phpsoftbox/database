@@ -58,7 +58,10 @@ final class SqliteSchemaCompiler extends AbstractSchemaCompiler
             $sql .= ' NOT NULL';
         }
 
-        if ($this->hasDefault($col)) {
+        if ($col->useCurrent) {
+            // SQLite хранит CURRENT_TIMESTAMP как текст 'YYYY-MM-DD HH:MM:SS' в UTC.
+            $sql .= ' DEFAULT CURRENT_TIMESTAMP';
+        } elseif ($this->hasDefault($col)) {
             $sql .= ' DEFAULT ' . $this->compileDefault($col->default);
         }
 
@@ -72,16 +75,23 @@ final class SqliteSchemaCompiler extends AbstractSchemaCompiler
 
     public function compileAlterTableAddForeignKeys(TableBlueprint $table): array
     {
-        // SQLite не поддерживает ADD CONSTRAINT FOREIGN KEY через ALTER TABLE.
-        // Для этого нужна пересборка таблицы.
-        return [];
+        // SQLite не поддерживает ADD CONSTRAINT FOREIGN KEY через ALTER TABLE: нужна пересборка таблицы.
+        // Молча пропускать внешний ключ нельзя — схема разойдётся с миграцией.
+        if ($table->foreignKeys() === []) {
+            return [];
+        }
+
+        throw new ConfigurationException('SQLite does not support adding foreign keys through ALTER TABLE. Rebuild the table manually.');
     }
 
     public function compileAlterTableDropForeignKeys(TableBlueprint $table): array
     {
-        // SQLite не поддерживает DROP CONSTRAINT/DROP FOREIGN KEY через ALTER TABLE.
-        // Для этого нужна пересборка таблицы.
-        return [];
+        // SQLite не поддерживает DROP CONSTRAINT/DROP FOREIGN KEY через ALTER TABLE: нужна пересборка таблицы.
+        if ($table->droppedForeignKeys() === []) {
+            return [];
+        }
+
+        throw new ConfigurationException('SQLite does not support dropping foreign keys through ALTER TABLE. Rebuild the table manually.');
     }
 
     public function compileAlterTableChangeColumns(TableBlueprint $table): array

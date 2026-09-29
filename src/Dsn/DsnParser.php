@@ -10,6 +10,7 @@ use function is_array;
 use function ltrim;
 use function parse_str;
 use function parse_url;
+use function rawurldecode;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -94,16 +95,17 @@ final class DsnParser
             default => $driver,
         };
 
-        $host     = isset($parts['host']) ? (string) $parts['host'] : null;
-        $port     = isset($parts['port']) ? (int) $parts['port'] : null;
-        $user     = isset($parts['user']) ? (string) $parts['user'] : null;
-        $password = isset($parts['pass']) ? (string) $parts['pass'] : null;
+        $host = isset($parts['host']) ? (string) $parts['host'] : null;
+        $port = isset($parts['port']) ? (int) $parts['port'] : null;
+        // Спецсимволы в логине/пароле/имени БД передаются URL-кодированными (p%40ss → p@ss).
+        $user     = isset($parts['user']) ? rawurldecode((string) $parts['user']) : null;
+        $password = isset($parts['pass']) ? rawurldecode((string) $parts['pass']) : null;
         $path     = isset($parts['path']) ? (string) $parts['path'] : null;
         $database = null;
 
         // Для сетевых драйверов считаем database = path без ведущего '/'
         if ($driver !== 'sqlite' && $path !== null && $path !== '') {
-            $database = ltrim($path, '/');
+            $database = rawurldecode(ltrim($path, '/'));
         }
 
         /** @var array<string, string> $params */

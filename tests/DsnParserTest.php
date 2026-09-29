@@ -53,6 +53,21 @@ final class DsnParserTest extends TestCase
         self::assertSame(['sslmode' => 'disable'], $dsn->params);
     }
 
+    /**
+     * Проверим, что URL-кодированные логин, пароль и имя БД декодируются.
+     *
+     * @see DsnParser::parse()
+     */
+    #[Test]
+    public function decodesUrlEncodedCredentials(): void
+    {
+        $dsn = new DsnParser()->parse('postgres://app%20user:p%40ss%3Aw%2Frd@localhost:5432/my%2Ddb');
+
+        self::assertSame('app user', $dsn->user);
+        self::assertSame('p@ss:w/rd', $dsn->password);
+        self::assertSame('my-db', $dsn->database);
+    }
+
     #[Test]
     public function keepsMySqlAndMariaDbAsDistinctDrivers(): void
     {

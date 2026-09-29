@@ -64,11 +64,16 @@ final class AutoIncrementChangeIntegrationTest extends TestCase
                 $column->comment('Updated record identifier')->change();
             });
 
-            $column = $db->fetchAll("
-                SELECT COLUMN_KEY, EXTRA, COLUMN_COMMENT
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName AND COLUMN_NAME = 'id'
-            ", ['tableName' => $tableName])[0];
+            $column = $db->fetchAll(
+                '
+                    SELECT COLUMN_KEY, EXTRA, COLUMN_COMMENT
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = :tableName
+                        AND COLUMN_NAME = \'id\'
+                ',
+                ['tableName' => $tableName],
+            )[0];
             self::assertSame('PRI', $column['COLUMN_KEY']);
             self::assertStringContainsString('auto_increment', $column['EXTRA']);
             self::assertSame('Updated record identifier', $column['COLUMN_COMMENT']);

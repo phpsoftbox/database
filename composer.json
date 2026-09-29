@@ -15,19 +15,18 @@
     "require": {
         "php": "^8.5",
         "ext-pdo": "*",
-        "phpsoftbox/database-lookup": "dev-master",
-        "phpsoftbox/error-formatter": "dev-master",
-        "phpsoftbox/inflector": "dev-master",
-        "phpsoftbox/pagination": "dev-master",
-        "phpsoftbox/profiler": "dev-master",
-        "phpsoftbox/validator-db": "dev-master",
+        "phpsoftbox/database-lookup": "^1.0",
+        "phpsoftbox/error-formatter": "^1.0",
+        "phpsoftbox/inflector": "^1.0",
+        "phpsoftbox/pagination": "^1.0",
+        "phpsoftbox/profiler": "^1.0",
+        "phpsoftbox/validator-db": "^1.0",
         "psr/log": "^3.0"
     },
     "require-dev": {
-        "friendsofphp/php-cs-fixer": "^3.93",
-        "phpsoftbox/cli-app": "dev-master",
-        "phpsoftbox/cs-fixer": "^1.1.0",
-        "phpunit/phpunit": "^11.2"
+        "phpsoftbox/cli-app": "^1.0",
+        "phpsoftbox/cs-fixer": "^1.2.2",
+        "phpunit/phpunit": "^13.3"
     },
     "autoload": {
         "psr-4": {
@@ -51,5 +50,5 @@
         "cs:fix": "vendor/bin/psb-cs-fixer fix",
         "cs:check": "vendor/bin/psb-cs-fixer check --diff"
     },
-    "minimum-stability": "dev"
+    "prefer-stable": true
 }

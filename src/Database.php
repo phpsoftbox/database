@@ -149,6 +149,20 @@ final readonly class Database
     }
 
     /**
+     * Очищает warmup store всех созданных подключений (hook сброса состояния между запросами воркера).
+     */
+    public function clearWarmup(): void
+    {
+        if ($this->manager instanceof ConnectionManager) {
+            $this->manager->clearWarmup();
+        }
+
+        if ($this->factory instanceof DatabaseFactory) {
+            $this->factory->clearWarmup();
+        }
+    }
+
+    /**
      * Возвращает сервис для чтения схемы (introspection) для указанного подключения.
      */
     public function schema(string $connection = 'default'): SchemaManagerInterface

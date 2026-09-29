@@ -90,10 +90,12 @@ final class ConnectionTest extends TestCase
                 name TEXT NOT NULL
             )
         ');
-        $pdo->exec("
-            INSERT INTO users (id, name)
-            VALUES (1, 'Alice')
-        ");
+        $pdo->exec(
+            '
+                INSERT INTO users (id, name)
+                VALUES (1, \'Alice\')
+            ',
+        );
 
         $logger = new SpyLogger();
 
@@ -151,7 +153,8 @@ final class ConnectionTest extends TestCase
     {
         $conn = new Connection(new FakePdo('mysql'), new MariaDbDriver(), 'app_');
 
-        self::assertSame('`user``name`', $conn->quoteIdentifier('user`name'));
+        self::assertSame('`user_name`', $conn->quoteIdentifier('user_name'));
+        self::assertSame('`user``name`', $conn->quoteIdentifier('`user``name`'));
         self::assertSame('`app_users`', $conn->quoteTable('users'));
     }
 
@@ -163,7 +166,8 @@ final class ConnectionTest extends TestCase
     {
         $conn = new Connection(new FakePdo('pgsql'), new PostgresDriver(), 'app_');
 
-        self::assertSame('"user""name"', $conn->quoteIdentifier('user"name'));
+        self::assertSame('"user_name"', $conn->quoteIdentifier('user_name'));
+        self::assertSame('"user""name"', $conn->quoteIdentifier('"user""name"'));
         self::assertSame('public.app_users', $conn->table('public.users'));
         self::assertSame('"public"."app_users"', $conn->quoteTable('public.users'));
     }
@@ -342,10 +346,16 @@ final class ConnectionTest extends TestCase
         $logger    = new SpyLogger();
         $timestamp = new DateTimeImmutable('2024-01-01 00:00:00+03:00');
 
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with(['2024-01-01 00:00:00'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('rowCount')
@@ -369,6 +379,8 @@ final class ConnectionTest extends TestCase
         $params = $last['context']['source_params'] ?? $last['context']['params'] ?? [];
 
         $this->assertSame('2024-01-01 00:00:00', $params['created_at'] ?? $params['0'] ?? null);
+
+        self::assertSame([1 => '2024-01-01 00:00:00'], $bound);
     }
 
     /**
@@ -404,10 +416,16 @@ final class ConnectionTest extends TestCase
     {
         $logger = new SpyLogger();
 
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([0])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('rowCount')
@@ -431,6 +449,8 @@ final class ConnectionTest extends TestCase
         $params = $last['context']['source_params'] ?? $last['context']['params'] ?? [];
 
         $this->assertSame(0, $params['is_email_confirmed'] ?? $params['0'] ?? null);
+
+        self::assertSame([1 => 0], $bound);
     }
 
     /**
@@ -439,10 +459,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function convertsRepeatedNamedPlaceholderToPositionalBindings(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with(['%john%', '%john%'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -463,6 +489,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([1 => '%john%', 2 => '%john%'], $bound);
     }
 
     /**
@@ -471,10 +499,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function inlinesBindingsForShowStatements(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -495,6 +529,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([], $bound);
     }
 
     /**
@@ -503,10 +539,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlForMixedNamedAndPositionalInput(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([0 => 'john@example.com', ':id' => 10])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -527,6 +569,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([1 => 'john@example.com', ':id' => 10], $bound);
     }
 
     /**
@@ -535,10 +579,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlWhenNamedPlaceholderValueIsMissing(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([':id' => 10])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -559,6 +609,8 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([':id' => 10], $bound);
     }
 
     /**
@@ -567,10 +619,16 @@ final class ConnectionTest extends TestCase
     #[Test]
     public function keepsOriginalSqlWhenExtraNamedParamProvided(): void
     {
-        $stmt = $this->createMock(PDOStatement::class);
+        $stmt  = $this->createMock(PDOStatement::class);
+        $bound = [];
+        $stmt->method('bindValue')
+            ->willReturnCallback(static function (int|string $key, mixed $value) use (&$bound): bool {
+                $bound[$key] = $value;
+
+                return true;
+            });
         $stmt->expects(self::once())
             ->method('execute')
-            ->with([':id' => 10, ':unused' => 'x'])
             ->willReturn(true);
         $stmt->expects(self::once())
             ->method('fetch')
@@ -591,5 +649,7 @@ final class ConnectionTest extends TestCase
         );
 
         self::assertNull($row);
+
+        self::assertSame([':id' => 10, ':unused' => 'x'], $bound);
     }
 }

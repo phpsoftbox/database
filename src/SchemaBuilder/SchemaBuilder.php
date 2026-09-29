@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace PhpSoftBox\Database\SchemaBuilder;
 
 use PhpSoftBox\Database\Contracts\ConnectionInterface;
+use PhpSoftBox\Database\Schema\SchemaManagerFactory;
+use PhpSoftBox\Database\SchemaBuilder\Compiler\AbstractSchemaCompiler;
 use PhpSoftBox\Database\SchemaBuilder\Compiler\SchemaCompilerInterface;
 
 use function array_merge;
@@ -27,6 +29,12 @@ final readonly class SchemaBuilder implements SchemaBuilderInterface
             ? $this->compiler->compileCreateTableIfNotExists($blueprint)
             : $this->compiler->compileCreateTable($blueprint);
         $indexesSql = $this->compiler->compileCreateIndexes($blueprint);
+
+        // Без CREATE INDEX IF NOT EXISTS (MySQL) повторное создание индексов существующей таблицы
+        // падает с ошибкой 1061, поэтому для существующей таблицы ничего не выполняем.
+        if ($ifNotExists && $indexesSql !== [] && !$this->supportsCreateIndexIfNotExists() && $this->tableExists($table)) {
+            return;
+        }
 
         $this->connection->execute($sql);
 
@@ -86,6 +94,19 @@ final readonly class SchemaBuilder implements SchemaBuilderInterface
     {
         $sql = $this->compiler->compileDropTable($this->connection->table($table));
         $this->connection->execute($sql);
+    }
+
+    private function supportsCreateIndexIfNotExists(): bool
+    {
+        return !$this->compiler instanceof AbstractSchemaCompiler || $this->compiler->supportsCreateIndexIfNotExists();
+    }
+
+    /**
+     * @param string $table Логическое имя таблицы (SchemaManager сам применяет prefix подключения).
+     */
+    private function tableExists(string $table): bool
+    {
+        return new SchemaManagerFactory()->create($this->connection)->hasTable($table);
     }
 
     public function createExtensionIfNotExists(string $extension): void

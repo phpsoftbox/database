@@ -4,33 +4,86 @@ declare(strict_types=1);
 
 namespace PhpSoftBox\Database\QueryBuilder\Compiler;
 
+use PhpSoftBox\Database\QueryBuilder\Quoting\MySqlQuoter;
 use PhpSoftBox\Database\QueryBuilder\Quoting\QuoterInterface;
 
-use function in_array;
-use function is_array;
+use function is_string;
+use function ltrim;
 use function preg_match;
-use function preg_split;
+use function preg_replace_callback;
 use function str_contains;
-use function str_ends_with;
-use function str_starts_with;
+use function strlen;
 use function strtoupper;
+use function substr;
 use function trim;
 
-use const PREG_SPLIT_DELIM_CAPTURE;
+use const PREG_OFFSET_CAPTURE;
 
 /**
  * Очень лёгкий "квотер" для WHERE/HAVING/ON.
  *
  * Важно: эти условия хранятся как raw SQL. Мы не можем надёжно распарсить любые выражения,
  * поэтому делаем безопасную эвристику:
- *  - квотим только простые идентификаторы: col или t.col
- *  - НЕ квотим токены, если рядом есть '(' или это число
- *  - не трогаем плейсхолдеры :name
+ *  - квотим только простые идентификаторы: col или t.col;
+ *  - не трогаем строковые литералы ('...'), уже экранированные идентификаторы ("..." / `...`),
+ *    плейсхолдеры (:name), приведения типов (::type) и числа;
+ *  - не квотим SQL-ключевые слова (AND, ILIKE, CURRENT_TIMESTAMP, ...), имена функций (слово перед "("),
+ *    префиксы типизированных литералов (DATE '2024-01-01') и единицы INTERVAL.
  *
  * Это не парсер SQL и не пытается быть им.
  */
 final class ConditionQuoter
 {
+    /**
+     * Слова, которые в условиях являются частью SQL-синтаксиса, а не именами колонок.
+     */
+    private const array KEYWORDS = [
+        'ALL'               => true,
+        'AND'               => true,
+        'ANY'               => true,
+        'AS'                => true,
+        'BETWEEN'           => true,
+        'BINARY'            => true,
+        'CASE'              => true,
+        'COLLATE'           => true,
+        'CURRENT_DATE'      => true,
+        'CURRENT_TIME'      => true,
+        'CURRENT_TIMESTAMP' => true,
+        'CURRENT_USER'      => true,
+        'DISTINCT'          => true,
+        'DIV'               => true,
+        'ELSE'              => true,
+        'END'               => true,
+        'ESCAPE'            => true,
+        'EXISTS'            => true,
+        'FALSE'             => true,
+        'FROM'              => true,
+        'GLOB'              => true,
+        'ILIKE'             => true,
+        'IN'                => true,
+        'INTERVAL'          => true,
+        'IS'                => true,
+        'LIKE'              => true,
+        'LOCALTIME'         => true,
+        'LOCALTIMESTAMP'    => true,
+        'MOD'               => true,
+        'NOT'               => true,
+        'NULL'              => true,
+        'ON'                => true,
+        'OR'                => true,
+        'REGEXP'            => true,
+        'RLIKE'             => true,
+        'SESSION_USER'      => true,
+        'SIMILAR'           => true,
+        'SOME'              => true,
+        'THEN'              => true,
+        'TO'                => true,
+        'TRUE'              => true,
+        'UNKNOWN'           => true,
+        'WHEN'              => true,
+        'XOR'               => true,
+    ];
+
     public function __construct(
         private readonly QuoterInterface $quoter,
     ) {
@@ -49,65 +102,60 @@ final class ConditionQuoter
             return $sql;
         }
 
-        // Режем по токенам, сохраняя разделители.
-        $parts = preg_split('/(\s+)/u', $sql, -1, PREG_SPLIT_DELIM_CAPTURE);
-        if (!is_array($parts)) {
-            return $sql;
-        }
+        // MySQL/MariaDB допускают экранирование обратным слэшем внутри строковых литералов.
+        $literal = $this->quoter instanceof MySqlQuoter
+            ? '\'(?:[^\'\\\\]|\\\\.|\'\')*\''
+            : '\'(?:[^\']|\'\')*\'';
 
-        $out = '';
+        $pattern = '/' . $literal
+            . '|"(?:[^"]|"")*"'
+            . '|`(?:[^`]|``)*`'
+            . '|::?[A-Za-z_][A-Za-z0-9_]*'
+            . '|0[xX][0-9A-Fa-f]+'
+            . '|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?'
+            . '|(?<word>[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|\*))*)'
+            . '/s';
 
-        foreach ($parts as $part) {
-            // пробелы
-            if ($part === '' || preg_match('/^\s+$/u', $part) === 1) {
-                $out .= $part;
-                continue;
-            }
-
-            // Плейсхолдеры или токены, содержащие плейсхолдеры (:id, :in_1, :between_1)
-            if (str_contains($part, ':')) {
-                $out .= $part;
-                continue;
-            }
-
-            // Числа
-            if (preg_match('/^\d+(?:\.\d+)?$/', $part) === 1) {
-                $out .= $part;
-                continue;
-            }
-
-            // Уже квочено
-            if ((str_starts_with($part, '`') && str_ends_with($part, '`'))
-                || (str_starts_with($part, '"') && str_ends_with($part, '"'))
-            ) {
-                $out .= $part;
-                continue;
-            }
-
-            // Функции (COUNT, SUM, ...): COUNT(*) / SUM(col) — само имя функции не квочим.
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*\(.*$/', $part) === 1) {
-                $out .= $part;
-                continue;
-            }
-
-            // Простые идентификаторы: a или a.b
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $part) === 1) {
-                $upper = strtoupper($part);
-                if (in_array($upper, [
-                    'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'EXISTS', 'LIKE', 'BETWEEN', 'ON',
-                    'TRUE', 'FALSE', 'AS',
-                ], true)) {
-                    $out .= $part;
-                    continue;
+        $out = preg_replace_callback(
+            $pattern,
+            function (array $match) use ($sql): string {
+                $token = $match[0][0];
+                $word  = $match['word'][0] ?? '';
+                if ($word === '' || $word !== $token) {
+                    return $token;
                 }
 
-                $out .= $this->quoter->dotted($part);
-                continue;
-            }
+                $offset = $match[0][1];
+                if ($this->isSyntaxWord($sql, $word, $offset)) {
+                    return $word;
+                }
 
-            $out .= $part;
+                return $this->quoter->dotted($word);
+            },
+            $sql,
+            -1,
+            $count,
+            PREG_OFFSET_CAPTURE,
+        );
+
+        return is_string($out) ? $out : $sql;
+    }
+
+    private function isSyntaxWord(string $sql, string $word, int $offset): bool
+    {
+        if (!str_contains($word, '.') && isset(self::KEYWORDS[strtoupper($word)])) {
+            return true;
         }
 
-        return $out;
+        // Имя функции (COUNT(...)) или префикс типизированного литерала (DATE '2024-01-01').
+        $rest = ltrim(substr($sql, $offset + strlen($word)));
+        if ($rest !== '' && ($rest[0] === '(' || $rest[0] === '\'')) {
+            return true;
+        }
+
+        // Единица измерения после INTERVAL <значение>: INTERVAL 1 DAY, INTERVAL :days DAY.
+        $before = substr($sql, 0, $offset);
+
+        return preg_match('/\bINTERVAL\s+(?:\'(?:[^\']|\'\')*\'|\d+(?:\.\d+)?|:[A-Za-z_][A-Za-z0-9_]*|\?)\s*$/i', $before) === 1;
     }
 }

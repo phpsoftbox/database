@@ -33,10 +33,10 @@ final class MariaDbSchemaCompilerUseCurrentTest extends TestCase
     }
 
     /**
-     * Проверяет, что useCurrent с форматом TIMESTAMP применяется только к колонке типа timestamp.
+     * Проверяет, что useCurrent применяется к колонке datetime независимо от устаревшего аргумента формата.
      */
     #[Test]
-    public function ignoresUseCurrentWhenFormatDoesNotMatchColumnType(): void
+    public function appliesUseCurrentRegardlessOfFormat(): void
     {
         $t = new TableBlueprint('users');
 
@@ -44,6 +44,6 @@ final class MariaDbSchemaCompilerUseCurrentTest extends TestCase
 
         $sql = new MariaDbSchemaCompiler()->compileCreateTable($t);
 
-        self::assertStringNotContainsString('DEFAULT CURRENT_TIMESTAMP', $sql);
+        self::assertStringContainsString('`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP', $sql);
     }
 }

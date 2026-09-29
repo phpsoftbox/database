@@ -67,7 +67,7 @@ abstract class AbstractMySqlDriver implements DriverInterface
 
     final public function createQueryCompiler(): QueryCompilerInterface
     {
-        return new StandardQueryCompiler($this->createQuoter());
+        return new StandardQueryCompiler($this->createQuoter(), emptyInsertValuesSql: '() VALUES ()');
     }
 
     abstract protected function displayName(): string;

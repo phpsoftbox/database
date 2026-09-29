@@ -58,6 +58,16 @@ $registry->addProvider(DatabaseCommandProvider::class);
 - `--force` (`-f`) — для `db:migrate:publish`: перезаписать уже опубликованные файлы
 
 Миграции ищутся только в корне указанной директории (без рекурсии).
+При программной загрузке `FileMigrationLoader::load($dir, recursive: true)` миграции из подкаталогов
+упорядочиваются по имени файла (`YYYYMMDDHHMMSS_description`), а не по пути: подкаталог не меняет хронологию.
+
+## Таблица применённых миграций
+
+`SqlMigrationRepository` создаёт таблицу `migrations` (с prefix подключения) через
+`SchemaBuilder::createIfNotExists()` один раз на подключение: повторные вызовы `ensureTable()` из
+`appliedIds()`/`markApplied()`/`removeApplied()` (в том числе внутри транзакции миграции) DDL не выполняют.
+Для существующей таблицы индексы повторно не создаются — это важно для MySQL, где нет
+`CREATE INDEX IF NOT EXISTS` и повторный запуск раньше падал с ошибкой 1061.
 
 При runtime-ошибках в `db:migrate` и `db:migrate:rollback` в CLI выводится полный stack-trace исключения.
 

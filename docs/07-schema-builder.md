@@ -35,6 +35,37 @@ $schema->create('users', function (TableBlueprint $table): void {
 - `datetime($name)`
 - `timestamp($name)`
 
+## Индексы на колонке
+
+`unique()` и `index()` на колонке создают индекс отдельным `CREATE [UNIQUE] INDEX` после создания таблицы
+(или после добавления колонок в `alterTable()`):
+
+```php
+$table->string('email')->unique();                  // users_email_unique
+$table->string('name')->index();                    // users_name_index
+$table->string('code')->unique('users_code_uniq');  // явное имя
+```
+
+Без имени используется `{таблица}_{колонка}_unique` / `{таблица}_{колонка}_index` (таблица — с prefix
+подключения). Раньше вызов без имени молча не создавал индекс.
+
+## Текущее время по умолчанию
+
+`useCurrent()` добавляет `DEFAULT CURRENT_TIMESTAMP` колонке `datetime()` или `timestamp()`:
+
+| СУБД | `useCurrent()` | `useCurrentOnUpdate()` |
+| --- | --- | --- |
+| MySQL/MariaDB | `DEFAULT CURRENT_TIMESTAMP` | `ON UPDATE CURRENT_TIMESTAMP` |
+| PostgreSQL | `DEFAULT CURRENT_TIMESTAMP` (в `change()` — `SET DEFAULT CURRENT_TIMESTAMP`) | `ConfigurationException` |
+| SQLite | `DEFAULT CURRENT_TIMESTAMP` (текст `YYYY-MM-DD HH:MM:SS` в UTC) | `ConfigurationException` |
+
+- На колонках других типов оба модификатора выбрасывают `ConfigurationException`.
+- `useCurrent()` имеет приоритет над `default()`.
+- Аргумент формата (`UseCurrentFormatsEnum`) сохранён для совместимости и больше не влияет на SQL:
+  раньше при несовпадении формата с типом колонки (например, `timestamp()->useCurrent()` на MySQL)
+  модификатор молча игнорировался, а на PostgreSQL и SQLite `useCurrent()` не работал вовсе.
+- Для PostgreSQL/SQLite обновление времени при изменении строки делайте триггером или в приложении.
+
 ## Кодировка и правила сравнения колонок
 
 `charset()` задаёт кодировку текста, а `collation()` — правила его сравнения
@@ -241,6 +272,19 @@ foreignKey(array $columns, string $refTable, array $refColumns, ?string $name = 
 - Для MariaDB используйте `InnoDB`, иначе FK не будут применяться.
 - Если вы хотите видеть ошибку при откате миграции, используйте `drop()` вместо `dropIfExists()`.
 - `foreignId()` — предпочтительный вариант для ссылок на `id()` (BIGINT UNSIGNED).
+- SQLite не умеет добавлять и удалять внешние ключи через `ALTER TABLE`: `foreignKey()`/`dropForeignKey()`
+  в `alterTable()` на SQLite выбрасывают `ConfigurationException` (раньше молча пропускались). Объявляйте
+  внешние ключи в `create()` или пересобирайте таблицу вручную.
+
+Строковые `default()` и комментарии на MySQL/MariaDB экранируются с учётом обратного слэша:
+`default('C:\temp\')` сохраняет значение без изменений.
+
+## Создание, если таблицы нет
+
+`create()` по умолчанию и `createIfNotExists()` используют `CREATE TABLE IF NOT EXISTS` и
+`CREATE INDEX IF NOT EXISTS`. MySQL не поддерживает `IF NOT EXISTS` для индексов, поэтому на нём
+builder сначала проверяет существование таблицы (`information_schema`) и для существующей таблицы
+не выполняет ни `CREATE TABLE`, ни создание индексов.
 
 ## Удаление таблиц
 

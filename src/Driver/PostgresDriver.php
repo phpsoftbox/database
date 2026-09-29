@@ -14,6 +14,7 @@ use PhpSoftBox\Database\QueryBuilder\Quoting\AnsiQuoter;
 use PhpSoftBox\Database\QueryBuilder\Quoting\QuoterInterface;
 
 use function in_array;
+use function preg_match;
 use function sprintf;
 
 final class PostgresDriver implements DriverInterface
@@ -45,7 +46,23 @@ final class PostgresDriver implements DriverInterface
         $dbname = $dsn->database;
 
         // PDO pgsql:host=...;port=...;dbname=...
-        return sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $dbname);
+        $pdoDsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $dbname);
+
+        // Query-параметры DSN (sslmode, sslrootcert, application_name, connect_timeout, ...) передаются в libpq.
+        foreach ($dsn->params as $name => $value) {
+            $name = (string) $name;
+            if (preg_match('/^[a-z_]+$/', $name) !== 1 || preg_match('/^[^\s;\'\\\\]*$/', $value) !== 1) {
+                throw new ConfigurationException(sprintf('Invalid Postgres DSN parameter "%s".', $name));
+            }
+
+            if (in_array($name, ['host', 'port', 'dbname', 'user', 'password'], true)) {
+                throw new ConfigurationException(sprintf('Postgres DSN parameter "%s" must be set in the URL part, not in the query string.', $name));
+            }
+
+            $pdoDsn .= ';' . $name . '=' . $value;
+        }
+
+        return $pdoDsn;
     }
 
     public function defaultPdoOptions(): array

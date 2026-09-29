@@ -29,7 +29,13 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
     public function tables(): array
     {
         $rows = $this->connection->fetchAll(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            '
+                SELECT name
+                FROM sqlite_master
+                WHERE type = \'table\'
+                    AND name NOT LIKE \'sqlite_%\'
+                ORDER BY name
+            ',
         );
 
         $tables = [];
@@ -45,13 +51,22 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
 
     public function hasTable(string $table): bool
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $table = trim($table);
         if ($table === '') {
             return false;
         }
 
         $row = $this->connection->fetchOne(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name AND name NOT LIKE 'sqlite_%'",
+            '
+                SELECT name
+                FROM sqlite_master
+                WHERE type = \'table\'
+                    AND name = :name
+                    AND name NOT LIKE \'sqlite_%\'
+            ',
             ['name' => $table],
         );
 
@@ -65,7 +80,7 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
         }
 
         return new TableDefinition(
-            name: $table,
+            name: $this->connection->table(trim($table)),
             columns: $this->columns($table),
             indexes: $this->indexes($table),
             foreignKeys: $this->foreignKeys($table),
@@ -74,6 +89,9 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
 
     public function columns(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->pragmaTableInfo($table);
 
         $columns = [];
@@ -118,6 +136,9 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
 
     public function primaryKey(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->pragmaTableInfo($table);
 
         $tmp = [];
@@ -144,6 +165,9 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
 
     public function indexes(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $t    = $this->escapeIdentifier($table);
         $rows = $this->connection->fetchAll('PRAGMA index_list("' . $t . '")');
 
@@ -174,6 +198,9 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
 
     public function foreignKeys(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $t    = $this->escapeIdentifier($table);
         $rows = $this->connection->fetchAll('PRAGMA foreign_key_list("' . $t . '")');
 

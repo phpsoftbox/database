@@ -15,10 +15,9 @@ use function glob;
 use function is_dir;
 use function preg_match;
 use function rtrim;
-use function sort;
 use function sprintf;
-
-use const SORT_STRING;
+use function strcmp;
+use function usort;
 
 /**
  * Загружает миграции из директории.
@@ -51,7 +50,9 @@ final class FileMigrationLoader
             return [];
         }
 
-        sort($files, SORT_STRING);
+        // Порядок определяется именем миграции (YYYYMMDDHHMMSS_description), а не путём:
+        // при рекурсивной загрузке подкаталоги не должны менять хронологию.
+        usort($files, static fn (string $a, string $b): int => strcmp(basename($a), basename($b)) ?: strcmp($a, $b));
 
         $out = [];
         foreach ($files as $file) {

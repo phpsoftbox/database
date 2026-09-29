@@ -1372,10 +1372,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT * FROM "users" WHERE ("active" = :active) AND (EXISTS (SELECT 1 FROM "orders" WHERE ("orders"."user_id" = "users"."id") AND ("orders"."status" = :st)))',
+            'SELECT * FROM "users" WHERE ("active" = :active) AND (EXISTS (SELECT 1 FROM "orders" WHERE ("orders"."user_id" = "users"."id") AND ("orders"."status" = :__sq1_st)))',
             $built['sql'],
         );
-        self::assertSame(['active' => 1, 'st' => 'paid'], $built['params']);
+        self::assertSame(['active' => 1, '__sq1_st' => 'paid'], $built['params']);
     }
 
     /**
@@ -1425,10 +1425,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "id" FROM "users" WHERE ("status" = :st2) UNION (SELECT "id" FROM "users" WHERE ("status" = :st))',
+            'SELECT "id" FROM "users" WHERE ("status" = :st2) UNION SELECT * FROM (SELECT "id" FROM "users" WHERE ("status" = :__sq1_st))',
             $built['sql'],
         );
-        self::assertSame(['st2' => 'active', 'st' => 'archived'], $built['params']);
+        self::assertSame(['st2' => 'active', '__sq1_st' => 'archived'], $built['params']);
     }
 
     /**
@@ -1451,10 +1451,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "id" FROM "users" UNION ALL (SELECT "id" FROM "users" WHERE ("id" > :min))',
+            'SELECT "id" FROM "users" UNION ALL SELECT * FROM (SELECT "id" FROM "users" WHERE ("id" > :__sq1_min))',
             $built['sql'],
         );
-        self::assertSame(['min' => 10], $built['params']);
+        self::assertSame(['__sq1_min' => 10], $built['params']);
     }
 
     /**
@@ -1526,11 +1526,11 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "id" FROM "users" WHERE ("id" < :max) UNION ALL (SELECT "id" FROM "users" WHERE ("id" > :min))',
+            'SELECT "id" FROM "users" WHERE ("id" < :max) UNION ALL SELECT * FROM (SELECT "id" FROM "users" WHERE ("id" > :__sq1_min))',
             $built['sql'],
         );
 
-        self::assertSame(['max' => 100, 'min' => 10], $built['params']);
+        self::assertSame(['max' => 100, '__sq1_min' => 10], $built['params']);
     }
 
     /**
@@ -1553,11 +1553,11 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "u"."id" FROM (SELECT "id", "email" FROM "users" WHERE ("email" LIKE :email)) AS "u" WHERE ("u"."id" > :min)',
+            'SELECT "u"."id" FROM (SELECT "id", "email" FROM "users" WHERE ("email" LIKE :__sq1_email)) AS "u" WHERE ("u"."id" > :min)',
             $built['sql'],
         );
 
-        self::assertSame(['email' => '%@example.com', 'min' => 10], $built['params']);
+        self::assertSame(['__sq1_email' => '%@example.com', 'min' => 10], $built['params']);
     }
 
     /**
@@ -1583,11 +1583,11 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "u"."id", "o"."cnt" FROM "users" AS "u" INNER JOIN (SELECT "user_id", COUNT(*) AS "cnt" FROM "orders" WHERE ("status" = :st) GROUP BY "user_id") AS "o" ON "o"."user_id" = "u"."id" WHERE ("u"."active" = :active)',
+            'SELECT "u"."id", "o"."cnt" FROM "users" AS "u" INNER JOIN (SELECT "user_id", COUNT(*) AS "cnt" FROM "orders" WHERE ("status" = :__sq1_st) GROUP BY "user_id") AS "o" ON "o"."user_id" = "u"."id" WHERE ("u"."active" = :active)',
             $built['sql'],
         );
 
-        self::assertSame(['st' => 'paid', 'active' => 1], $built['params']);
+        self::assertSame(['__sq1_st' => 'paid', 'active' => 1], $built['params']);
     }
 
     /**
@@ -1666,10 +1666,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT "u"."id", EXISTS (SELECT 1 FROM "orders" WHERE ("orders"."user_id" = "u"."id") AND ("status" = :st)) AS "has_paid_orders" FROM "users" AS "u"',
+            'SELECT "u"."id", EXISTS (SELECT 1 FROM "orders" WHERE ("orders"."user_id" = "u"."id") AND ("status" = :__sq1_st)) AS "has_paid_orders" FROM "users" AS "u"',
             $built['sql'],
         );
-        self::assertSame(['st' => 'paid'], $built['params']);
+        self::assertSame(['__sq1_st' => 'paid'], $built['params']);
     }
 
     /**
@@ -1713,10 +1713,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT * FROM (SELECT "id" FROM "users" UNION ALL (SELECT "id" FROM "users" WHERE ("id" > :min))) AS _u ORDER BY "id" DESC LIMIT 5',
+            'SELECT * FROM (SELECT "id" FROM "users" UNION ALL SELECT * FROM (SELECT "id" FROM "users" WHERE ("id" > :__sq1_min))) AS _u ORDER BY "id" DESC LIMIT 5',
             $built['sql'],
         );
-        self::assertSame(['min' => 10], $built['params']);
+        self::assertSame(['__sq1_min' => 10], $built['params']);
     }
 
     /**
@@ -1737,10 +1737,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT * FROM "users" WHERE (id IN (SELECT "user_id" FROM "orders" WHERE ("status" = :st))) AND ("active" = :active)',
+            'SELECT * FROM "users" WHERE (id IN (SELECT "user_id" FROM "orders" WHERE ("status" = :__sq1_st))) AND ("active" = :active)',
             $built['sql'],
         );
-        self::assertSame(['st' => 'paid', 'active' => 1], $built['params']);
+        self::assertSame(['__sq1_st' => 'paid', 'active' => 1], $built['params']);
     }
 
     /**
@@ -1761,10 +1761,10 @@ final class QueryBuilderTest extends TestCase
             ->toSql();
 
         self::assertSame(
-            'SELECT * FROM "users" WHERE ("active" = 1) OR (id IN (SELECT "user_id" FROM "orders" WHERE ("status" = :st)))',
+            'SELECT * FROM "users" WHERE ("active" = 1) OR (id IN (SELECT "user_id" FROM "orders" WHERE ("status" = :__sq1_st)))',
             $built['sql'],
         );
-        self::assertSame(['st' => 'paid'], $built['params']);
+        self::assertSame(['__sq1_st' => 'paid'], $built['params']);
     }
 
     /**
