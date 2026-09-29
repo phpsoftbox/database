@@ -67,6 +67,7 @@ abstract class AbstractSchemaCompiler implements SchemaCompilerInterface
     {
         $this->validateColumnCharacterOptions($col);
         $this->validateGeneratedColumn($col);
+        $this->validateUseCurrent($col);
 
         return $this->compileColumnDefinition($col, $table);
     }
@@ -204,12 +205,12 @@ abstract class AbstractSchemaCompiler implements SchemaCompilerInterface
 
         // Авто-индексы, выставленные на уровне колонок.
         foreach ($table->columns() as $col) {
-            if ($col->uniqueName !== null) {
+            if ($col->withUnique || $col->uniqueName !== null) {
                 $indexes[] = new IndexBlueprint([
                     $col->name,
                 ], $col->uniqueName, true);
             }
-            if ($col->indexName !== null) {
+            if ($col->withIndex || $col->indexName !== null) {
                 $indexes[] = new IndexBlueprint([
                     $col->name,
                 ], $col->indexName, false);
@@ -366,6 +367,37 @@ abstract class AbstractSchemaCompiler implements SchemaCompilerInterface
         if ($col->useCurrent || $col->useCurrentOnUpdate) {
             throw new ConfigurationException('Generated columns cannot use CURRENT_TIMESTAMP modifiers.');
         }
+    }
+
+    /**
+     * useCurrent()/useCurrentOnUpdate() не должны молча игнорироваться:
+     * допускаются только для datetime/timestamp, ON UPDATE — только там, где его поддерживает СУБД.
+     */
+    final protected function validateUseCurrent(ColumnBlueprint $col): void
+    {
+        if (!$col->useCurrent && !$col->useCurrentOnUpdate) {
+            return;
+        }
+
+        if (!in_array($col->type, ['datetime', 'timestamp'], true)) {
+            throw new ConfigurationException(sprintf(
+                'useCurrent()/useCurrentOnUpdate() are supported only for datetime/timestamp columns (column "%s" has type "%s").',
+                $col->name,
+                $col->type,
+            ));
+        }
+
+        if ($col->useCurrentOnUpdate && !$this->supportsUseCurrentOnUpdate()) {
+            throw new ConfigurationException(sprintf(
+                'useCurrentOnUpdate() (ON UPDATE CURRENT_TIMESTAMP) for column "%s" is supported only by mysql/mariadb schema compilers; use a trigger or set the value in the application.',
+                $col->name,
+            ));
+        }
+    }
+
+    protected function supportsUseCurrentOnUpdate(): bool
+    {
+        return false;
     }
 
     /**
