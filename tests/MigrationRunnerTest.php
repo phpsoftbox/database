@@ -146,7 +146,7 @@ PHP);
 
         $conn = $manager->write('main');
         $rows = $conn->fetchAll(
-            "SELECT name FROM migrations WHERE connection_name = 'main' ORDER BY id",
+            'SELECT name FROM migrations WHERE connection_name = \'main\' ORDER BY id',
         );
         self::assertCount(2, $rows);
         self::assertSame('20251226090000_create_users', $rows[0]['name']);
@@ -238,7 +238,7 @@ PHP);
         self::assertSame(['20251226090100_second'], $rolledBack);
 
         $rows = $manager->write('main')->fetchAll(
-            "SELECT name FROM migrations WHERE connection_name = 'main' ORDER BY id",
+            'SELECT name FROM migrations WHERE connection_name = \'main\' ORDER BY id',
         );
         self::assertCount(1, $rows);
         self::assertSame('20251226090000_first', $rows[0]['name']);

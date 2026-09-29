@@ -29,7 +29,13 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
     public function tables(): array
     {
         $rows = $this->connection->fetchAll(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            '
+                SELECT name
+                FROM sqlite_master
+                WHERE type = \'table\'
+                    AND name NOT LIKE \'sqlite_%\'
+                ORDER BY name
+            ',
         );
 
         $tables = [];
@@ -51,7 +57,13 @@ final readonly class SqliteSchemaManager implements SchemaManagerInterface
         }
 
         $row = $this->connection->fetchOne(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name AND name NOT LIKE 'sqlite_%'",
+            '
+                SELECT name
+                FROM sqlite_master
+                WHERE type = \'table\'
+                    AND name = :name
+                    AND name NOT LIKE \'sqlite_%\'
+            ',
             ['name' => $table],
         );
 

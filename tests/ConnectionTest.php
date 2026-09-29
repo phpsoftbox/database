@@ -90,10 +90,12 @@ final class ConnectionTest extends TestCase
                 name TEXT NOT NULL
             )
         ');
-        $pdo->exec("
-            INSERT INTO users (id, name)
-            VALUES (1, 'Alice')
-        ");
+        $pdo->exec(
+            '
+                INSERT INTO users (id, name)
+                VALUES (1, \'Alice\')
+            ',
+        );
 
         $logger = new SpyLogger();
 
