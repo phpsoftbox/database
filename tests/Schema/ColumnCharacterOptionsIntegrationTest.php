@@ -188,10 +188,13 @@ final class ColumnCharacterOptionsIntegrationTest extends TestCase
             self::assertSame('utf8mb4_bin', $metadata['COLLATION_NAME']);
         } else {
             // Default collation зависит от версии и конфигурации СУБД: не зашиваем её имя.
-            $default = $db->fetchOne("
-                SELECT DEFAULT_COLLATE_NAME FROM information_schema.CHARACTER_SETS
-                WHERE CHARACTER_SET_NAME = 'utf8mb4'
-            ");
+            $default = $db->fetchOne(
+                '
+                    SELECT DEFAULT_COLLATE_NAME
+                    FROM information_schema.CHARACTER_SETS
+                    WHERE CHARACTER_SET_NAME = \'utf8mb4\'
+                ',
+            );
             self::assertSame($default['DEFAULT_COLLATE_NAME'], $metadata['COLLATION_NAME']);
         }
     }
