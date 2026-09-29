@@ -153,7 +153,8 @@ final class ConnectionTest extends TestCase
     {
         $conn = new Connection(new FakePdo('mysql'), new MariaDbDriver(), 'app_');
 
-        self::assertSame('`user``name`', $conn->quoteIdentifier('user`name'));
+        self::assertSame('`user_name`', $conn->quoteIdentifier('user_name'));
+        self::assertSame('`user``name`', $conn->quoteIdentifier('`user``name`'));
         self::assertSame('`app_users`', $conn->quoteTable('users'));
     }
 
@@ -165,7 +166,8 @@ final class ConnectionTest extends TestCase
     {
         $conn = new Connection(new FakePdo('pgsql'), new PostgresDriver(), 'app_');
 
-        self::assertSame('"user""name"', $conn->quoteIdentifier('user"name'));
+        self::assertSame('"user_name"', $conn->quoteIdentifier('user_name'));
+        self::assertSame('"user""name"', $conn->quoteIdentifier('"user""name"'));
         self::assertSame('public.app_users', $conn->table('public.users'));
         self::assertSame('"public"."app_users"', $conn->quoteTable('public.users'));
     }

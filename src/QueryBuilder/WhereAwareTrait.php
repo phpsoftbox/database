@@ -11,6 +11,7 @@ use function array_key_exists;
 use function array_key_last;
 use function array_pop;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_callable;
 use function is_string;
@@ -24,6 +25,16 @@ use function trim;
 
 trait WhereAwareTrait
 {
+    /**
+     * Операторы, допустимые в массивном where().
+     */
+    private const array WHERE_ARRAY_OPERATORS = [
+        '=', '!=', '<>', '<', '>', '<=', '>=', '<=>',
+        'LIKE', 'NOT LIKE', 'ILIKE', 'NOT ILIKE',
+        'IN', 'NOT IN', 'IS', 'IS NOT',
+        'IS DISTINCT FROM', 'IS NOT DISTINCT FROM',
+    ];
+
     /**
      * Узлы WHERE верхнего уровня.
      *
@@ -195,6 +206,7 @@ trait WhereAwareTrait
 
                 // shorthand: ['u.id' => [1,2,3]] => IN (...)
                 if (is_array($condition) && array_is_list($condition)) {
+                    $this->assertWhereArrayColumn($column);
                     $this->whereInInternal($boolean, $column, $condition, not: false);
                     continue;
                 }
@@ -272,9 +284,19 @@ trait WhereAwareTrait
             return;
         }
 
+        $this->assertWhereArrayColumn($column);
+
         $operator = strtoupper(trim((string) preg_replace('/\s+/', ' ', $operator)));
         if ($operator === '') {
             $operator = '=';
+        }
+
+        if (!in_array($operator, self::WHERE_ARRAY_OPERATORS, true)) {
+            throw new InvalidArgumentException('Unsupported where() array operator "' . $operator . '".');
+        }
+
+        if (is_array($operand) && isset($operand['column'])) {
+            $this->assertWhereArrayColumn((string) $operand['column']);
         }
 
         if ($operator === 'IN' || $operator === 'NOT IN') {
@@ -743,6 +765,15 @@ trait WhereAwareTrait
         }
 
         return ['sql' => trim((string) $subquery), 'params' => []];
+    }
+
+    /**
+     * Колонки в массивном where() могут приходить из данных запроса (фильтры), поэтому допускаются
+     * только идентификаторы: col, t.col, schema.t.col или экранированные имена текущего диалекта.
+     */
+    private function assertWhereArrayColumn(string $column): void
+    {
+        $this->quoteDottedIdent($column);
     }
 
     private function assertSimpleWhereString(string $sql): void

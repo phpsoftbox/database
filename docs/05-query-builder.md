@@ -150,6 +150,41 @@ $qb->groupBy('client_id')
    ->orHavingRaw('SUM(total) > :sum', ['sum' => 1000]);
 ```
 
+## Экранирование идентификаторов
+
+Имена колонок и таблиц (ключи `insert()`/`update()`, колонки `orderBy()`/`groupBy()`, ключи и колонки
+массивного `where()`, `Connection::quoteIdentifier()`/`quoteTable()`) принимаются только в двух формах:
+
+- простое имя из букв, цифр и `_`, при необходимости через точку: `id`, `u.name`, `public.users.id`, `u.*`;
+- уже экранированное имя в кавычках **текущего** диалекта с удвоенными внутренними кавычками:
+  `"order"` для PostgreSQL/SQLite, `` `order` `` для MySQL/MariaDB.
+
+Любая другая строка (пробелы, операторы, запятые, кавычки другого диалекта) приводит к
+`InvalidArgumentException`. Раньше строка в кавычках по краям считалась «уже экранированной», и ключ
+вида `'"is_admin" = true, "name"'` из данных запроса встраивался в `UPDATE ... SET` как SQL.
+
+```php
+$conn->query()->update('users', ['"is_admin" = true, "name"' => 'x']); // InvalidArgumentException при компиляции
+$conn->quoteIdentifier('user`name');                                     // InvalidArgumentException
+```
+
+Операторы массивного `where()` ограничены списком: `=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `<=>`,
+`LIKE`, `NOT LIKE`, `ILIKE`, `NOT ILIKE`, `IN`, `NOT IN`, `IS`, `IS NOT`, `IS [NOT] DISTINCT FROM`.
+
+Алиасы (`fromSubquery(..., 'alias')`, `selectExists(..., 'alias')`) по-прежнему могут содержать любой текст:
+он всегда экранируется целиком. Имя таблицы допускает алиас с `AS` и без него: `users u`, `users AS u`.
+
+### Условия where()/having()/ON
+
+Простые строковые условия (`where('status = :status')`, условие `join(..., 'o.user_id = u.id')`)
+экранируются эвристикой: в кавычки берутся только имена колонок. Не изменяются:
+
+- строковые литералы: `name = 'hello world'`;
+- ключевые слова и операторы: `AND`, `OR`, `IS NULL`, `ILIKE`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, ...;
+- имена функций (слово перед `(`), префиксы типизированных литералов (`DATE '2024-01-01'`),
+  единицы после `INTERVAL` (`INTERVAL 1 DAY`);
+- плейсхолдеры `:name`, приведения `::type`, числа и уже экранированные имена.
+
 ## SELECT raw и strict
 
 `select()` теперь для простых колонок (`id`, `u.name`, `u.*`, `u.name AS user_name`).

@@ -94,7 +94,7 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
 
         $groupBy = $builder->groupByColumns();
         if ($groupBy !== []) {
-            $sql .= ' GROUP BY ' . implode(', ', array_map(fn (string $c): string => $this->quoter->dotted($c), $groupBy));
+            $sql .= ' GROUP BY ' . implode(', ', array_map(fn (string $c): string => $this->quoteOrderByExpr($c), $groupBy));
         }
 
         $havingCompiled = $treeCompiler->compile($builder->havingNodes());
