@@ -337,7 +337,7 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
                 $q->isBuildingSubquery = $prev;
             }
 
-            return $q->toSql();
+            return $this->embedSubquery($q->toSql());
         }
 
         return ['sql' => trim((string) $subquery), 'params' => []];
@@ -350,7 +350,7 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
     private function compileSubqueryAny(callable|SelectQueryBuilder|Expression|string $subquery): array
     {
         if ($subquery instanceof SelectQueryBuilder) {
-            return $subquery->toSql();
+            return $this->embedSubquery($subquery->toSql());
         }
 
         return $this->compileSubquery($subquery);
@@ -397,7 +397,7 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
     private function unionInternal(string $type, SelectQueryBuilder|Expression|string|callable $query): self
     {
         if ($query instanceof SelectQueryBuilder) {
-            $built = $query->toSql();
+            $built = $this->embedSubquery($query->toSql());
             $sql   = trim($built['sql']);
             if ($sql === '') {
                 return $this;
@@ -444,6 +444,9 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
      * Возвращает количество строк для текущего запроса.
      *
      * Важно: для подсчёта сбрасываются ORDER BY / LIMIT / OFFSET.
+     * Запросы с GROUP BY, HAVING, DISTINCT или UNION считаются через обёртку
+     * SELECT COUNT(*) FROM (<запрос>) — возвращается количество строк результата (групп, уникальных строк),
+     * аргумент $column в этом случае не используется.
      */
     public function count(string $column = '*'): int
     {
@@ -452,7 +455,9 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
             $column = '*';
         }
 
-        $value = $this->aggregate('COUNT', $column);
+        $value = $this->requiresWrappedCount()
+            ? $this->wrappedCount()
+            : $this->aggregate('COUNT', $column);
 
         if ($value === null) {
             return 0;
@@ -552,6 +557,39 @@ final class SelectQueryBuilder extends AbstractQueryBuilder
             page: $pageValue,
             perPage: $perPageValue,
         );
+    }
+
+    /**
+     * Проверяет, что COUNT нужно считать по строкам результата, а не по строкам таблицы.
+     */
+    private function requiresWrappedCount(): bool
+    {
+        return $this->groupBy !== []
+            || $this->distinct
+            || $this->unions !== []
+            || $this->havingNodes() !== [];
+    }
+
+    /**
+     * SELECT COUNT(*) FROM (<запрос без ORDER BY/LIMIT/OFFSET/lock>) AS __count.
+     */
+    private function wrappedCount(): mixed
+    {
+        $q = clone $this;
+
+        $q->orderBy    = [];
+        $q->limit      = null;
+        $q->offset     = null;
+        $q->lockClause = null;
+
+        $built = $q->compile();
+
+        $row = $this->connection->fetchOne(
+            'SELECT COUNT(*) AS __agg FROM (' . $built->sql . ') AS __count',
+            $built->bindings,
+        );
+
+        return $row['__agg'] ?? null;
     }
 
     /**

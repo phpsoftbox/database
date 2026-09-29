@@ -40,6 +40,40 @@ $compiled->bindings;
 - в SQL есть placeholder без значения;
 - переданы лишние named-параметры, отсутствующие в SQL.
 
+## Подзапросы и UNION
+
+Подзапросы (`whereInSubquery()`, `whereExists()`, `fromSubquery()`, `joinSubquery()`, `selectExists()`)
+и части `union()`/`unionAll()` компилируются отдельными билдерами, у каждого из которых своя нумерация
+автоматических параметров (`:in_1`, `:where_1`, ...). Чтобы значения не подменяли друг друга, при встраивании
+все именованные параметры подзапроса получают уникальный префикс `__sq{N}_`:
+
+```php
+$archived = $conn->query()->select('id')->from('users')->whereIn('id', [3, 4]);
+
+$compiled = $conn->query()
+    ->select('id')
+    ->from('users')
+    ->whereIn('id', [1, 2])
+    ->union($archived)
+    ->compile();
+
+// SELECT "id" FROM "users" WHERE ("id" IN (:in_1, :in_2))
+//     UNION (SELECT "id" FROM "users" WHERE ("id" IN (:__sq1_in_1, :__sq1_in_2)))
+// bindings: ['in_1' => 1, 'in_2' => 2, '__sq1_in_1' => 3, '__sq1_in_2' => 4]
+```
+
+Имена параметров, переданных в подзапрос вручную (`['status' => ...]`), тоже получают префикс — не
+рассчитывайте на них в собранном `CompiledQuery`. Не используйте собственные имена параметров, начинающиеся
+с `__sq`.
+
+Части UNION встраиваются в скобках: `... UNION (SELECT ...)`. SQLite скобки вокруг частей UNION не
+поддерживает, поэтому для него используется форма `... UNION SELECT * FROM (SELECT ...)`.
+
+## INSERT без колонок
+
+`insert('table', [])` вставляет строку со значениями по умолчанию: `INSERT INTO t DEFAULT VALUES`
+для PostgreSQL и SQLite, `INSERT INTO t () VALUES ()` для MySQL/MariaDB.
+
 ## Агрегации
 
 `SelectQueryBuilder` поддерживает:
@@ -59,6 +93,19 @@ $hasActive = $conn->query()->select()->from('users')->where('active = 1')->exist
 $noActive = $conn->query()->select()->from('users')->where('active = 1')->notExists();
 $minId = $conn->query()->select()->from('users')->min('id');
 ```
+
+`count()` сбрасывает `ORDER BY`/`LIMIT`/`OFFSET`. Если в запросе есть `GROUP BY`, `HAVING`, `DISTINCT`
+или `UNION`, подсчёт выполняется обёрткой `SELECT COUNT(*) FROM (<запрос>) AS __count`: возвращается
+количество строк результата (групп, уникальных строк, строк объединения), аргумент `$column` в этом
+случае не используется. Так же считается `total` в `paginate()`.
+
+```php
+// Количество групп, а не размер первой группы.
+$clients = $conn->query()->select('client_id')->from('orders')->groupBy('client_id')->count();
+```
+
+`sum()`/`avg()`/`min()`/`max()` к группировкам не адаптируются: при `GROUP BY` они вернут значение
+для первой группы.
 
 ## WHERE DSL и raw
 

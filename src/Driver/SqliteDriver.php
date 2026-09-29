@@ -60,6 +60,6 @@ final class SqliteDriver implements DriverInterface
 
     public function createQueryCompiler(): QueryCompilerInterface
     {
-        return new StandardQueryCompiler($this->createQuoter());
+        return new StandardQueryCompiler($this->createQuoter(), wrapUnionPartsInDerivedTable: true);
     }
 }

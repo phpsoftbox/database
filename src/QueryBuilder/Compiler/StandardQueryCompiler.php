@@ -8,6 +8,7 @@ use PhpSoftBox\Database\QueryBuilder\CompiledQuery;
 use PhpSoftBox\Database\QueryBuilder\DeleteQueryBuilder;
 use PhpSoftBox\Database\QueryBuilder\Expression;
 use PhpSoftBox\Database\QueryBuilder\InsertQueryBuilder;
+use PhpSoftBox\Database\QueryBuilder\Quoting\QuoterInterface;
 use PhpSoftBox\Database\QueryBuilder\SelectQueryBuilder;
 use PhpSoftBox\Database\QueryBuilder\UpdateQueryBuilder;
 
@@ -25,6 +26,20 @@ use function trim;
 
 final class StandardQueryCompiler extends AbstractQueryCompiler implements QueryCompilerInterface
 {
+    /**
+     * @param string $emptyInsertValuesSql SQL после имени таблицы для INSERT без колонок:
+     *                                     `DEFAULT VALUES` (PostgreSQL, SQLite) или `() VALUES ()` (MySQL/MariaDB).
+     * @param bool $wrapUnionPartsInDerivedTable Встраивать части UNION как `SELECT * FROM (<часть>)`
+     *                                           вместо `(<часть>)`: SQLite не поддерживает скобки вокруг частей UNION.
+     */
+    public function __construct(
+        QuoterInterface $quoter,
+        private readonly string $emptyInsertValuesSql = 'DEFAULT VALUES',
+        private readonly bool $wrapUnionPartsInDerivedTable = false,
+    ) {
+        parent::__construct($quoter);
+    }
+
     public function compileSelect(SelectQueryBuilder $builder): CompiledQuery
     {
         $unions  = $builder->unions();
@@ -67,7 +82,10 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
             }
         }
 
-        $whereCompiled = new ConditionTreeCompiler($condQuoter)->compile($builder->whereNodes());
+        // Один компилятор дерева на WHERE и HAVING: совпадающие пользовательские плейсхолдеры переименовываются.
+        $treeCompiler = new ConditionTreeCompiler($condQuoter);
+
+        $whereCompiled = $treeCompiler->compile($builder->whereNodes());
 
         if ($whereCompiled['sql'] !== '') {
             $sql .= ' WHERE ' . $whereCompiled['sql'];
@@ -79,7 +97,7 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
             $sql .= ' GROUP BY ' . implode(', ', array_map(fn (string $c): string => $this->quoter->dotted($c), $groupBy));
         }
 
-        $havingCompiled = new ConditionTreeCompiler($condQuoter)->compile($builder->havingNodes());
+        $havingCompiled = $treeCompiler->compile($builder->havingNodes());
 
         if ($havingCompiled['sql'] !== '') {
             $sql .= ' HAVING ' . $havingCompiled['sql'];
@@ -103,7 +121,9 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
         }
 
         foreach ($unions as $u) {
-            $sql .= ' ' . $u['type'] . ' (' . $u['query'] . ')';
+            $sql .= ' ' . $u['type'] . ($this->wrapUnionPartsInDerivedTable
+                ? ' SELECT * FROM (' . $u['query'] . ')'
+                : ' (' . $u['query'] . ')');
             if ($u['params'] !== []) {
                 $params = array_merge($params, $u['params']);
             }
@@ -157,7 +177,7 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
 
         $sql = 'INSERT INTO ' . $this->quoteTableWithOptionalAlias($builder->table());
         if ($cols === []) {
-            $sql .= ' DEFAULT VALUES';
+            $sql .= ' ' . $this->emptyInsertValuesSql;
 
             return new CompiledQuery($sql, []);
         }

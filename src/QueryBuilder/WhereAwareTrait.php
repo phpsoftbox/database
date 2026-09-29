@@ -724,7 +724,7 @@ trait WhereAwareTrait
     private function compileWhereSubquery(callable|SelectQueryBuilder|Expression|string $subquery): array
     {
         if ($subquery instanceof SelectQueryBuilder) {
-            return $subquery->toSql();
+            return $this->embedSubquery($subquery->toSql());
         }
 
         if ($subquery instanceof Expression) {
@@ -739,7 +739,7 @@ trait WhereAwareTrait
 
             $subquery($q);
 
-            return $q->toSql();
+            return $this->embedSubquery($q->toSql());
         }
 
         return ['sql' => trim((string) $subquery), 'params' => []];
