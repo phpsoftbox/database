@@ -69,10 +69,13 @@ $compiled = $conn->query()
 Части UNION встраиваются в скобках: `... UNION (SELECT ...)`. SQLite скобки вокруг частей UNION не
 поддерживает, поэтому для него используется форма `... UNION SELECT * FROM (SELECT ...)`.
 
-## INSERT без колонок
+## INSERT/UPDATE без колонок
 
 `insert('table', [])` вставляет строку со значениями по умолчанию: `INSERT INTO t DEFAULT VALUES`
 для PostgreSQL и SQLite, `INSERT INTO t () VALUES ()` для MySQL/MariaDB.
+
+`update('table', [])` при компиляции выбрасывает `InvalidArgumentException` (раньше собирался
+некорректный `UPDATE t SET 1 = 1`). Проверяйте, что набор изменений не пуст, до вызова `execute()`.
 
 ## Агрегации
 

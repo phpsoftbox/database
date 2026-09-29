@@ -60,6 +60,9 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
      */
     public function hasTable(string $table): bool
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $table = trim($table);
         if ($table === '') {
             return false;
@@ -86,7 +89,7 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
         }
 
         return new TableDefinition(
-            name: $table,
+            name: $this->connection->table(trim($table)),
             columns: $this->columns($table),
             indexes: $this->indexes($table),
             foreignKeys: $this->foreignKeys($table),
@@ -99,6 +102,9 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
      */
     public function columns(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             '
                 SELECT
@@ -177,6 +183,9 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
      */
     public function primaryKey(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             '
                 SELECT kcu.column_name
@@ -213,6 +222,9 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
      */
     public function indexes(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             '
                 SELECT
@@ -274,6 +286,9 @@ final readonly class PostgresSchemaManager implements SchemaManagerInterface
      */
     public function foreignKeys(string $table): array
     {
+        // Логическое имя таблицы: prefix подключения применяется здесь.
+        $table = $this->connection->table(trim($table));
+
         $rows = $this->connection->fetchAll(
             '
                 SELECT

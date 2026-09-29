@@ -32,7 +32,7 @@ final readonly class SchemaBuilder implements SchemaBuilderInterface
 
         // Без CREATE INDEX IF NOT EXISTS (MySQL) повторное создание индексов существующей таблицы
         // падает с ошибкой 1061, поэтому для существующей таблицы ничего не выполняем.
-        if ($ifNotExists && $indexesSql !== [] && !$this->supportsCreateIndexIfNotExists() && $this->tableExists($blueprint->table)) {
+        if ($ifNotExists && $indexesSql !== [] && !$this->supportsCreateIndexIfNotExists() && $this->tableExists($table)) {
             return;
         }
 
@@ -101,9 +101,12 @@ final readonly class SchemaBuilder implements SchemaBuilderInterface
         return !$this->compiler instanceof AbstractSchemaCompiler || $this->compiler->supportsCreateIndexIfNotExists();
     }
 
-    private function tableExists(string $physicalTable): bool
+    /**
+     * @param string $table Логическое имя таблицы (SchemaManager сам применяет prefix подключения).
+     */
+    private function tableExists(string $table): bool
     {
-        return new SchemaManagerFactory()->create($this->connection)->hasTable($physicalTable);
+        return new SchemaManagerFactory()->create($this->connection)->hasTable($table);
     }
 
     public function createExtensionIfNotExists(string $extension): void

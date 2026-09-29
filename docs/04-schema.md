@@ -17,6 +17,10 @@
 - `foreignKey($table, $foreignKey)`
 - `foreignKeysByColumn($table, $column)`
 
+Методы принимают **логическое** имя таблицы: prefix подключения (`connections.*.prefix`) применяется
+автоматически, как в `SchemaBuilder` и QueryBuilder. `tables()` и `table($table)->name` возвращают
+физические имена (с prefix). Не передавайте имя с уже добавленным prefix — он будет добавлен повторно.
+
 Пример (SQLite):
 
 ```php

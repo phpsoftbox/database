@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpSoftBox\Database\QueryBuilder\Compiler;
 
+use InvalidArgumentException;
 use PhpSoftBox\Database\QueryBuilder\CompiledQuery;
 use PhpSoftBox\Database\QueryBuilder\DeleteQueryBuilder;
 use PhpSoftBox\Database\QueryBuilder\Expression;
@@ -230,7 +231,7 @@ final class StandardQueryCompiler extends AbstractQueryCompiler implements Query
         }
 
         if ($setParts === []) {
-            $setParts[] = '1 = 1';
+            throw new InvalidArgumentException('UPDATE requires at least one column to set.');
         }
 
         $sql .= implode(', ', $setParts);

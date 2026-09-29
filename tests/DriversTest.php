@@ -32,6 +32,42 @@ final class DriversTest extends TestCase
     }
 
     /**
+     * Проверим, что query-параметры DSN (sslmode и др.) передаются в PDO DSN PostgreSQL.
+     *
+     * @see PostgresDriver::pdoDsn()
+     */
+    #[Test]
+    public function postgresPassesQueryParamsToPdoDsn(): void
+    {
+        $pdoDsn = new PostgresDriver()->pdoDsn(new Dsn(
+            driver: 'postgres',
+            host: 'localhost',
+            database: 'app',
+            params: ['sslmode' => 'require', 'application_name' => 'wms'],
+        ));
+
+        self::assertSame('pgsql:host=localhost;port=5432;dbname=app;sslmode=require;application_name=wms', $pdoDsn);
+    }
+
+    /**
+     * Проверим, что значение query-параметра со спецсимволами DSN (;) отклоняется.
+     *
+     * @see PostgresDriver::pdoDsn()
+     */
+    #[Test]
+    public function postgresRejectsUnsafeQueryParam(): void
+    {
+        $this->expectException(ConfigurationException::class);
+
+        new PostgresDriver()->pdoDsn(new Dsn(
+            driver: 'postgres',
+            host: 'localhost',
+            database: 'app',
+            params: ['sslmode' => 'require;dbname=other'],
+        ));
+    }
+
+    /**
      * Проверяет, что PostgresDriver строит PDO DSN и использует порт по умолчанию.
      */
     #[Test]

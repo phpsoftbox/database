@@ -14,6 +14,17 @@
 Также поддерживаем алиасы схем:
 - `pgsql://...` → `postgres://...`
 
+Спецсимволы в логине, пароле и имени БД передаются URL-кодированными и декодируются парсером:
+`postgres://app:p%40ss%3Aword@db:5432/app` → пароль `p@ss:word`.
+
+Query-параметры DSN:
+- PostgreSQL: все параметры передаются в PDO DSN как параметры libpq — `sslmode`, `sslrootcert`,
+  `sslcert`, `sslkey`, `application_name`, `connect_timeout` и т.д.
+  (`postgres://user:pass@db:5432/app?sslmode=require` → `pgsql:host=db;port=5432;dbname=app;sslmode=require`).
+  Имя параметра — строчные латинские буквы и `_`; значение без пробелов, `;`, `'` и `\`;
+  `host`/`port`/`dbname`/`user`/`password` задаются в URL, а не в query. Иначе — `ConfigurationException`.
+- MySQL/MariaDB: поддерживается `charset`.
+
 MySQL и MariaDB используют один PDO-драйвер `pdo_mysql`, но являются разными
 SQL-диалектами. Выбор выполняется явно схемой DSN:
 
