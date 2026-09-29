@@ -279,6 +279,13 @@ foreignKey(array $columns, string $refTable, array $refColumns, ?string $name = 
 Строковые `default()` и комментарии на MySQL/MariaDB экранируются с учётом обратного слэша:
 `default('C:\temp\')` сохраняет значение без изменений.
 
+## Создание, если таблицы нет
+
+`create()` по умолчанию и `createIfNotExists()` используют `CREATE TABLE IF NOT EXISTS` и
+`CREATE INDEX IF NOT EXISTS`. MySQL не поддерживает `IF NOT EXISTS` для индексов, поэтому на нём
+builder сначала проверяет существование таблицы (`information_schema`) и для существующей таблицы
+не выполняет ни `CREATE TABLE`, ни создание индексов.
+
 ## Удаление таблиц
 
 ```php

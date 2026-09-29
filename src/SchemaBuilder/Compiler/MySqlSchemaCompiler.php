@@ -11,7 +11,7 @@ final class MySqlSchemaCompiler extends AbstractMySqlSchemaCompiler
         return 'mysql';
     }
 
-    protected function supportsCreateIndexIfNotExists(): bool
+    public function supportsCreateIndexIfNotExists(): bool
     {
         return false;
     }

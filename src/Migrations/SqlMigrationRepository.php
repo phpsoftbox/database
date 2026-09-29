@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use PhpSoftBox\Database\Contracts\ConnectionInterface;
 use PhpSoftBox\Database\SchemaBuilder\TableBlueprint;
+use WeakMap;
 
 use function is_string;
 
@@ -18,13 +19,28 @@ use function is_string;
  */
 final class SqlMigrationRepository implements MigrationRepositoryInterface
 {
+    /**
+     * Подключения, для которых таблица миграций уже проверена/создана.
+     *
+     * ensureTable() вызывается из appliedIds()/markApplied()/removeApplied(), в том числе внутри транзакции
+     * миграции: повторный DDL там не нужен (а на MySQL/MariaDB ещё и неявно фиксирует транзакцию).
+     *
+     * @var WeakMap<ConnectionInterface, true>
+     */
+    private WeakMap $ensured;
+
     public function __construct(
         private readonly string $table = 'migrations',
     ) {
+        $this->ensured = new WeakMap();
     }
 
     public function ensureTable(ConnectionInterface $connection): void
     {
+        if (isset($this->ensured[$connection])) {
+            return;
+        }
+
         // Создаём через SchemaBuilder, чтобы:
         // - SQL был корректным для текущего драйвера
         // - учитывался table prefix из конфигурации
@@ -44,6 +60,8 @@ final class SqlMigrationRepository implements MigrationRepositoryInterface
             // Время применения (UTC).
             $table->datetime('applied_datetime');
         });
+
+        $this->ensured[$connection] = true;
     }
 
     public function appliedIds(ConnectionInterface $connection, string $connectionName): array

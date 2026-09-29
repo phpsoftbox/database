@@ -280,7 +280,10 @@ abstract class AbstractSchemaCompiler implements SchemaCompilerInterface
         return false;
     }
 
-    protected function supportsCreateIndexIfNotExists(): bool
+    /**
+     * Поддерживает ли диалект CREATE INDEX IF NOT EXISTS (MySQL — нет).
+     */
+    public function supportsCreateIndexIfNotExists(): bool
     {
         return true;
     }
