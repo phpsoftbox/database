@@ -12,7 +12,7 @@ use PhpSoftBox\Database\Exception\ConfigurationException;
 /**
  * Ленивая обёртка над DatabaseFactory: создаёт подключения по требованию и кэширует их.
  */
-final class ConnectionManager implements ConnectionManagerInterface
+final class ConnectionManager implements WarmupAwareConnectionManagerInterface
 {
     /**
      * @var array<string, ConnectionInterface>
