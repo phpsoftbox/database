@@ -8,6 +8,7 @@ use PhpSoftBox\Database\Configurator\DatabaseFactory;
 use PhpSoftBox\Database\Configurator\DatabaseFactoryInterface;
 use PhpSoftBox\Database\Connection\ConnectionManager;
 use PhpSoftBox\Database\Connection\ConnectionManagerInterface;
+use PhpSoftBox\Database\Connection\WarmupAwareConnectionManagerInterface;
 use PhpSoftBox\Database\Contracts\ConnectionInterface;
 use PhpSoftBox\Database\Schema\SchemaManagerFactory;
 use PhpSoftBox\Database\Schema\SchemaManagerInterface;
@@ -153,7 +154,7 @@ final readonly class Database
      */
     public function clearWarmup(): void
     {
-        if ($this->manager instanceof ConnectionManager) {
+        if ($this->manager instanceof WarmupAwareConnectionManagerInterface) {
             $this->manager->clearWarmup();
         }
 
