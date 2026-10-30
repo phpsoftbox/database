@@ -71,6 +71,30 @@ final class DatabaseCommandProvider implements CommandProviderInterface
         ));
 
         $registry->register(Command::define(
+            name: 'db:migrate:dump',
+            description: 'Записать снимок схемы для развёртывания пустой базы',
+            signature: [
+                new OptionDefinition(
+                    name: 'connection',
+                    short: 'c',
+                    description: 'Имя подключения или группы',
+                    required: false,
+                    default: null,
+                    type: 'string',
+                ),
+                new OptionDefinition(
+                    name: 'data',
+                    short: 'd',
+                    description: 'Таблицы через запятую, строки которых сохраняются в снимке',
+                    required: false,
+                    default: null,
+                    type: 'string',
+                ),
+            ],
+            handler: DumpSchemaHandler::class,
+        ));
+
+        $registry->register(Command::define(
             name: 'db:migrate:make',
             description: 'Создать файл миграции',
             signature: [

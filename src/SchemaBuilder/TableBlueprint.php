@@ -168,6 +168,30 @@ final class TableBlueprint
         return $col;
     }
 
+    /**
+     * Текст до 16 МБ в MySQL/MariaDB (MEDIUMTEXT); в SQLite и Postgres — TEXT.
+     */
+    public function mediumText(string $name): ColumnBlueprint
+    {
+        $col = new ColumnBlueprint($name, 'mediumText');
+
+        $this->columns[$name] = $col;
+
+        return $col;
+    }
+
+    /**
+     * Текст до 4 ГБ в MySQL/MariaDB (LONGTEXT); в SQLite и Postgres — TEXT.
+     */
+    public function longText(string $name): ColumnBlueprint
+    {
+        $col = new ColumnBlueprint($name, 'longText');
+
+        $this->columns[$name] = $col;
+
+        return $col;
+    }
+
     public function string(string $name, int $length = 255): ColumnBlueprint
     {
         $col = new ColumnBlueprint($name, 'string');

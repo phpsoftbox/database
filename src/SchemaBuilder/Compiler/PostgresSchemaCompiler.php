@@ -121,6 +121,8 @@ final class PostgresSchemaCompiler extends AbstractSchemaCompiler
             'decimal'    => 'NUMERIC',
             'boolean'    => 'BOOLEAN',
             'text'       => 'TEXT',
+            'mediumText' => 'TEXT',
+            'longText'   => 'TEXT',
             'string'     => 'VARCHAR',
             'json'       => 'JSONB',
             'datetime'   => 'TIMESTAMP',

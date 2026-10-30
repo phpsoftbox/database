@@ -65,6 +65,8 @@ abstract class AbstractMySqlSchemaCompiler extends AbstractSchemaCompiler
             'decimal'    => 'DECIMAL',
             'boolean'    => 'TINYINT(1)',
             'text'       => 'TEXT',
+            'mediumText' => 'MEDIUMTEXT',
+            'longText'   => 'LONGTEXT',
             'string'     => 'VARCHAR',
             'json'       => 'JSON',
             'datetime'   => 'DATETIME',

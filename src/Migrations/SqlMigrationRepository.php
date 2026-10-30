@@ -35,6 +35,14 @@ final class SqlMigrationRepository implements MigrationRepositoryInterface
         $this->ensured = new WeakMap();
     }
 
+    /**
+     * Имя таблицы без префикса подключения.
+     */
+    public function table(): string
+    {
+        return $this->table;
+    }
+
     public function ensureTable(ConnectionInterface $connection): void
     {
         if (isset($this->ensured[$connection])) {
