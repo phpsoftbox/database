@@ -13,6 +13,7 @@ use PhpSoftBox\Database\Migrations\MigrationPlan;
 use PhpSoftBox\Database\Migrations\MigrationRepositoryInterface;
 use PhpSoftBox\Database\Migrations\MigrationRunner;
 use PhpSoftBox\Database\Migrations\MigrationsConfig;
+use PhpSoftBox\Database\Migrations\Snapshot\SchemaSnapshotFile;
 use PhpSoftBox\Database\Migrations\SqlMigrationRepository;
 use PhpSoftBox\ErrorFormatter\ThrowableFormatter;
 use PhpSoftBox\Inflector\Contracts\InflectorInterface;
@@ -90,8 +91,16 @@ final class MigrateHandler implements HandlerInterface
             connectionName: $connectionName,
         );
 
+        // Снимок схемы лежит в корне каталога миграций подключения; частичный запуск по --path его не использует.
+        $snapshotPath = $paths[0] . '/' . SchemaSnapshotFile::FILE_NAME;
+        $useSnapshot  = $runner->request()->option('path') === null && SchemaSnapshotFile::exists($snapshotPath);
+
         try {
-            $applied = $runnerService->migrate($plan);
+            if ($useSnapshot) {
+                $runner->io()->writeln('Снимок схемы для пустой базы: ' . $snapshotPath, 'info');
+            }
+
+            $applied = $runnerService->migrate($plan, $useSnapshot ? SchemaSnapshotFile::read($snapshotPath) : null);
         } catch (Throwable $exception) {
             $this->renderException($runner, 'Ошибка миграции:', $exception);
 

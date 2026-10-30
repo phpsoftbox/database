@@ -328,9 +328,9 @@ abstract class AbstractSchemaCompiler implements SchemaCompilerInterface
             ));
         }
 
-        if (!in_array($col->type, ['string', 'text'], true)) {
+        if (!in_array($col->type, ['string', 'text', 'mediumText', 'longText'], true)) {
             throw new ConfigurationException(sprintf(
-                'Column charset/collation are not supported for type "%s" (column "%s"); use string or text.',
+                'Column charset/collation are not supported for type "%s" (column "%s"); use string or text types.',
                 $col->type,
                 $col->name,
             ));

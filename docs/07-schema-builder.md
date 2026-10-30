@@ -24,6 +24,7 @@ $schema->create('users', function (TableBlueprint $table): void {
 - `id()` — автоинкрементный PK.
 - `string($name, $length = 255)`
 - `text($name)`
+- `mediumText($name)`, `longText($name)` — MEDIUMTEXT/LONGTEXT в MySQL и MariaDB, TEXT в SQLite и Postgres
 - `integer($name)`
 - `bigInteger($name)`
 - `decimal($name, $precision = 10, $scale = 2)`
@@ -72,7 +73,7 @@ $table->string('code')->unique('users_code_uniq');  // явное имя
 и сортировки. Настройки таблицы служат значениями по умолчанию; отдельная колонка
 может их переопределить. Это влияет и на уникальные индексы.
 
-Для MySQL и MariaDB модификаторы поддерживаются у `string()` и `text()` при
+Для MySQL и MariaDB модификаторы поддерживаются у `string()`, `text()`, `mediumText()` и `longText()` при
 CREATE TABLE, ADD COLUMN и MODIFY COLUMN (`change()`):
 
 ```php

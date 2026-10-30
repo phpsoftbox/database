@@ -39,6 +39,8 @@ final class SqliteSchemaCompiler extends AbstractSchemaCompiler
             'decimal'    => 'NUMERIC',
             'boolean'    => 'INTEGER',
             'text'       => 'TEXT',
+            'mediumText' => 'TEXT',
+            'longText'   => 'TEXT',
             'string'     => 'TEXT',
             'json'       => 'TEXT',
             'datetime'   => 'TEXT',
