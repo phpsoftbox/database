@@ -40,6 +40,7 @@ use function is_scalar;
 use function is_string;
 use function json_encode;
 use function ltrim;
+use function max;
 use function preg_match_all;
 use function preg_replace_callback;
 use function sprintf;
@@ -54,6 +55,12 @@ use const JSON_UNESCAPED_UNICODE;
 final class Connection implements WarmupAwareConnectionInterface
 {
     private int $transactionLevel = 0;
+
+    /**
+     * Внешние уровни транзакции, которую сервер уже откатил целиком вместе с точками сохранения (deadlock, на
+     * MariaDB со snapshot isolation — ER_CHECKREAD 1020). Их откат — без SQL, фиксация — ошибка.
+     */
+    private int $abortedLevels = 0;
 
     private WarmupStore $warmupStore;
 
@@ -183,6 +190,11 @@ final class Connection implements WarmupAwareConnectionInterface
             throw new ReadOnlyException('Transactions are not allowed for read-only connections.');
         }
 
+        // Inside a transaction the server has rolled back nothing more can run in it.
+        if ($this->abortedLevels > 0) {
+            throw new QueryException('The transaction has been rolled back by the database server; finish it before starting another.');
+        }
+
         try {
             $this->beginTransaction($isolationLevel);
             $result = $fn($this);
@@ -190,10 +202,45 @@ final class Connection implements WarmupAwareConnectionInterface
 
             return $result;
         } catch (Throwable $e) {
-            $this->rollbackTransaction();
+            $this->rollbackAfterError($e);
 
             throw $e;
         }
+    }
+
+    /**
+     * Откат после ошибки внутри транзакции. Если сервер уже откатил транзакцию целиком, точки сохранения вложенного
+     * уровня нет: вызывающий получает исходную ошибку, а не «SAVEPOINT does not exist».
+     */
+    private function rollbackAfterError(Throwable $error): void
+    {
+        try {
+            $this->rollbackTransaction();
+        } catch (Throwable $rollbackError) {
+            // rollbackTransaction() has already left the failed level: what remains are the outer levels.
+            $outerLevels = $this->transactionLevel;
+            $this->abortTransaction();
+            $this->abortedLevels = $outerLevels;
+            $this->logger?->warning('Transaction rolled back by the database server; savepoint rollback failed.', [
+                'error'          => $error->getMessage(),
+                'rollback_error' => $rollbackError->getMessage(),
+                'outer_levels'   => $outerLevels,
+            ]);
+        }
+    }
+
+    /** Транзакция уже откачена сервером: завершить её на стороне PDO и забыть уровни. */
+    private function abortTransaction(): void
+    {
+        $this->clearWarmup();
+        try {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+        } catch (Throwable) {
+            // Nothing is left to roll back on the server.
+        }
+        $this->transactionLevel = 0;
     }
 
     /**
@@ -710,6 +757,11 @@ final class Connection implements WarmupAwareConnectionInterface
 
     private function commitTransaction(): bool
     {
+        // An outer level of a transaction the server has rolled back: its changes are lost, a commit must not hide it.
+        if ($this->abortedLevels > 0) {
+            throw new QueryException('The transaction has been rolled back by the database server; nothing was committed.');
+        }
+
         if (!$this->pdo->inTransaction()) {
             $this->logger?->warning(
                 sprintf(
@@ -742,14 +794,21 @@ final class Connection implements WarmupAwareConnectionInterface
 
     private function rollbackTransaction(): bool
     {
+        if ($this->abortedLevels > 0) {
+            --$this->abortedLevels;
+
+            return false;
+        }
+
         if (!$this->pdo->inTransaction()) {
             $this->logger?->warning(
-                sprintf(
-                    'Attempt to rollback a transaction that has not yet begun. Transaction level: %d',
-                    $this->transactionLevel,
-                ),
+                $this->transactionLevel > 1
+                    ? sprintf('Transaction rolled back by the database server inside a nested level. Transaction level: %d', $this->transactionLevel)
+                    : sprintf('Attempt to rollback a transaction that has not yet begun. Transaction level: %d', $this->transactionLevel),
             );
 
+            // A nested level whose transaction the server has already ended: the outer levels are rolled back too.
+            $this->abortedLevels    = max(0, $this->transactionLevel - 1);
             $this->transactionLevel = 0;
 
             return false;
