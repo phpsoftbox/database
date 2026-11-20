@@ -21,6 +21,7 @@
         "phpsoftbox/pagination": "^1.0",
         "phpsoftbox/profiler": "^1.0",
         "phpsoftbox/validator-db": "^1.0",
+        "psr/container": "^2.0",
         "psr/log": "^3.0"
     },
     "require-dev": {

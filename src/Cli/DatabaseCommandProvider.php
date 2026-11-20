@@ -15,6 +15,28 @@ final class DatabaseCommandProvider implements CommandProviderInterface
     public function register(CommandRegistryInterface $registry): void
     {
         $registry->register(Command::define(
+            name: 'db:seed',
+            description: 'Применить seed-сценарий',
+            signature: [
+                new ArgumentDefinition(
+                    name: 'scenario',
+                    description: 'Имя seed-сценария',
+                    required: true,
+                    type: 'string',
+                ),
+                new OptionDefinition(
+                    name: 'connection',
+                    short: 'c',
+                    description: 'Имя подключения или группы',
+                    required: false,
+                    default: 'default',
+                    type: 'string',
+                ),
+            ],
+            handler: SeedHandler::class,
+        ));
+
+        $registry->register(Command::define(
             name: 'db:migrate',
             description: 'Применить миграции',
             signature: [

@@ -34,3 +34,4 @@ $conn->execute('INSERT INTO ' . $conn->table('users') . ' (name) VALUES (:name)'
 - [docs/07-schema-builder.md](docs/07-schema-builder.md) — SchemaBuilder, создание/изменение таблиц, внешние ключи, charset/collation отдельных колонок и правила обновления потребителей.
 - `docs/08-warmup.md` — lifecycle warmup строк по идентификаторным ключам.
 - `docs/09-postgres-full-text-search.md` — PostgreSQL `tsvector`, `tsquery`, rank и GIN-индексы.
+- [Заполнение БД через CLI](docs/10-seeds.md) — регистрация и запуск seed-сценариев.
